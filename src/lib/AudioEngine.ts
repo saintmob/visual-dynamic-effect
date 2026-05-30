@@ -19,8 +19,8 @@ export class AudioEngine {
   
   public context: AudioContext | null = null;
   public analyser: AnalyserNode | null = null;
-  public dataArray: Uint8Array | null = null;
-  public timeDataArray: Uint8Array | null = null;
+  public dataArray: Uint8Array<ArrayBuffer> | null = null;
+  public timeDataArray: Uint8Array<ArrayBuffer> | null = null;
   public source: MediaStreamAudioSourceNode | null = null;
   public stream: MediaStream | null = null;
   public activeSourceType: 'none' | 'mic' | 'music' | 'api' = 'none';
@@ -74,7 +74,7 @@ export class AudioEngine {
     highMid: 0,
     treble: 0,
   };
-  private previousFrequencyFrame: Uint8Array | null = null;
+  private previousFrequencyFrame: Uint8Array<ArrayBuffer> | null = null;
 
   private constructor() {}
 
