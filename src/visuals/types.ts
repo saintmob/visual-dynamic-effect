@@ -2,6 +2,7 @@ import type { AudioDriveSnapshot, MusicDriveFrame } from '@/lib/audioDrive';
 
 export type VisualSceneId =
   | 'Layered Stage'
+  | 'Purple'
   | 'Blue Font'
   | 'Pulse'
   | 'Liquid'
@@ -100,7 +101,7 @@ export interface VisualModuleDefinition {
   liveLabel: string;
   presetId: string;
   description: string;
-  renderMode: 'canvas-2d' | 'blue-font' | 'r3f';
+  renderMode: 'canvas-2d' | 'blue-font' | 'webgl-2d' | 'r3f';
   defaultLook: VisualLookDefaults;
   mapAudioToVisualState: (audio: AudioDriveSnapshot, music: MusicDriveFrame) => VisualModuleAudioState;
   mapLiveControlsToParams: (live: VisualModuleLiveControls) => VisualModuleLiveParams;

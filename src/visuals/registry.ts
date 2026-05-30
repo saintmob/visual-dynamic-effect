@@ -5,12 +5,14 @@ import { dumbarModule } from './dumbar';
 import { layeredStageModule } from './layered-stage';
 import { liquidModule } from './liquid';
 import { pulseModule } from './pulse';
+import { purpleModule } from './purple';
 import { topologyModule } from './topology';
 import { voidModule } from './void';
 import type { VisualLookDefaults, VisualModuleDefinition, VisualSceneId } from './types';
 
 export const visualModules: VisualModuleDefinition[] = [
   layeredStageModule,
+  purpleModule,
   blueFontModule,
   pulseModule,
   liquidModule,

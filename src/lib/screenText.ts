@@ -30,6 +30,7 @@ export const screenText = {
     },
     scenes: {
       'Layered Stage': 'Layered Stage',
+      Purple: 'Purple',
       Dumbar: 'Grey Glass',
       Topology: 'Sonic Topology',
       Liquid: 'Liquid',
@@ -69,6 +70,7 @@ export const screenText = {
     },
     scenes: {
       'Layered Stage': '分层舞台',
+      Purple: 'Purple',
       Dumbar: '灰玻璃',
       Topology: '声波拓扑',
       Liquid: '流体',

@@ -11,6 +11,20 @@ import { useApiAudioSource } from '@/lib/useApiAudioSource';
 import { useScreenSync } from '@/lib/screenSync';
 import { useStore, type VisualInputSource } from '@/store/useStore';
 
+const audioDebugChanged = (a: AudioDebugSnapshot, b: AudioDebugSnapshot) => (
+  a.status !== b.status ||
+  a.message !== b.message ||
+  a.contextState !== b.contextState ||
+  a.streamActive !== b.streamActive ||
+  a.sourceType !== b.sourceType ||
+  Math.abs(a.rawRms - b.rawRms) > 0.006 ||
+  Math.abs(a.rawVolume - b.rawVolume) > 0.006 ||
+  Math.abs(a.frequencyDelta - b.frequencyDelta) > 0.004 ||
+  a.frequencyChanged !== b.frequencyChanged ||
+  a.peakFrequencyBin !== b.peakFrequencyBin ||
+  a.sampleRate !== b.sampleRate
+);
+
 export default function App() {
   const screenMatch = window.location.pathname.match(/^\/screen\/([^/]+)/);
 
@@ -68,6 +82,7 @@ function ControllerApp() {
   const visualInputSource = useStore((state) => state.visualInputSource);
   const [initError, setInitError] = useState('');
   const [audioDebug, setAudioDebug] = useState<AudioDebugSnapshot>(() => audioEngine.getDebugSnapshot());
+  const audioDebugRef = useRef(audioDebug);
   const lastAudioDebugUpdateRef = useRef(0);
 
   useScreenSync('controller');
@@ -75,7 +90,9 @@ function ControllerApp() {
 
   useEffect(() => {
     if (visualInputSource === 'api') {
-      setAudioDebug(audioEngine.getDebugSnapshot());
+      const nextDebug = audioEngine.getDebugSnapshot();
+      audioDebugRef.current = nextDebug;
+      setAudioDebug(nextDebug);
       return undefined;
     }
 
@@ -92,7 +109,11 @@ function ControllerApp() {
       const now = performance.now();
       if (now - lastAudioDebugUpdateRef.current > 120) {
         lastAudioDebugUpdateRef.current = now;
-        setAudioDebug(audioEngine.getDebugSnapshot());
+        const nextDebug = audioEngine.getDebugSnapshot();
+        if (audioDebugChanged(audioDebugRef.current, nextDebug)) {
+          audioDebugRef.current = nextDebug;
+          setAudioDebug(nextDebug);
+        }
       }
     }, 33);
 
@@ -135,17 +156,23 @@ function ControllerApp() {
     setVisualInputSource('mic');
     setAudioReady(false);
     setInitError('');
-    setAudioDebug({ ...audioEngine.getDebugSnapshot(), status: 'requesting', message: 'Waiting for microphone permission.' });
+    const requestingDebug = { ...audioEngine.getDebugSnapshot(), status: 'requesting' as const, message: 'Waiting for microphone permission.' };
+    audioDebugRef.current = requestingDebug;
+    setAudioDebug(requestingDebug);
     try {
       window.dispatchEvent(new Event('vj:stop-music'));
       await audioEngine.startMicrophone();
       setAudioReady(true);
       setInitError('');
-      setAudioDebug(audioEngine.getDebugSnapshot());
+      const nextDebug = audioEngine.getDebugSnapshot();
+      audioDebugRef.current = nextDebug;
+      setAudioDebug(nextDebug);
     } catch (err: unknown) {
       setAudioReady(false);
       setInitError(getReadableMicErrorMessage(err, language));
-      setAudioDebug(audioEngine.getDebugSnapshot());
+      const nextDebug = audioEngine.getDebugSnapshot();
+      audioDebugRef.current = nextDebug;
+      setAudioDebug(nextDebug);
     }
   }, [language, setAudioReady, setVisualInputSource]);
 
@@ -157,7 +184,9 @@ function ControllerApp() {
     audioEngine.stopCurrentAudioSource();
     setAudioReady(false);
     setInitError('');
-    setAudioDebug(audioEngine.getDebugSnapshot());
+    const nextDebug = audioEngine.getDebugSnapshot();
+    audioDebugRef.current = nextDebug;
+    setAudioDebug(nextDebug);
     if (source !== 'music') window.dispatchEvent(new Event('vj:stop-music'));
     setVisualInputSource(source);
   }, [activateMic, setAudioReady, setVisualInputSource]);
@@ -173,7 +202,9 @@ function ControllerApp() {
       audioEngine.stopCurrentAudioSource();
       setAudioReady(false);
       setInitError('');
-      setAudioDebug(audioEngine.getDebugSnapshot());
+      const nextDebug = audioEngine.getDebugSnapshot();
+      audioDebugRef.current = nextDebug;
+      setAudioDebug(nextDebug);
     };
 
     window.addEventListener('vj:select-input', handleSelectInput);
