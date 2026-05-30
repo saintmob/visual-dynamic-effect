@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import type { AudioDriveMode } from '../lib/audioDrive';
 import { SHOW_SCREEN_IDS } from '../lib/screenRoutes';
+import { getPresetLook } from '../visuals/registry';
 
 export type VisualInputSource = 'mic' | 'music' | 'api';
 export type OutputMode = 'mirror' | 'solo' | 'split';
@@ -35,6 +36,23 @@ export interface VisualMemory {
   textSpeed: number;
   textReactive: number;
   textColor: string;
+}
+
+export interface LiveControls {
+  energyX: number;
+  energyY: number;
+  colorX: number;
+  colorY: number;
+  rhythmX: number;
+  rhythmY: number;
+  structureX: number;
+  structureY: number;
+  textureX: number;
+  textureY: number;
+  atmosphereX: number;
+  atmosphereY: number;
+  selectedLookId: string;
+  selectedSceneId: string;
 }
 
 interface VisualizerState {
@@ -108,6 +126,11 @@ interface VisualizerState {
 
   isFullscreen: boolean;
   setIsFullscreen: (val: boolean) => void;
+  liveMode: boolean;
+  setLiveMode: (val: boolean) => void;
+  liveControls: LiveControls;
+  setLiveControl: (key: keyof LiveControls, value: number | string) => void;
+  setLiveControls: (values: Partial<LiveControls>) => void;
   activeLeftPanel: string;
   setActiveLeftPanel: (panel: string) => void;
   applyPreset: (presetId: string) => void;
@@ -196,7 +219,7 @@ const defaultScreens: VisualScreen[] = SHOW_SCREEN_IDS.map((id, index) => ({
   id,
   name: `Show Screen ${id}`,
   device: index === 0 ? 'stage' : 'led',
-  scene: index % 4 === 0 ? 'Cyber' : index % 4 === 1 ? 'Topology' : index % 4 === 2 ? 'Pulse' : 'Liquid',
+  scene: index === 0 ? 'Layered Stage' : index % 4 === 1 ? 'Topology' : index % 4 === 2 ? 'Pulse' : 'Liquid',
   enabled: true,
 }));
 
@@ -244,6 +267,23 @@ const persistVisualSettings = (settings: StoredVisualSettings) => {
 
 const storedVisualSettings = loadStoredVisualSettings();
 
+const defaultLiveControls: LiveControls = {
+  energyX: 0.5,
+  energyY: 0.35,
+  colorX: 0.45,
+  colorY: 0.58,
+  rhythmX: 0.62,
+  rhythmY: 0.55,
+  structureX: 0.48,
+  structureY: 0.42,
+  textureX: 0.38,
+  textureY: 0.32,
+  atmosphereX: 0.52,
+  atmosphereY: 0.44,
+  selectedLookId: 'Layered Stage',
+  selectedSceneId: 'Layered Stage',
+};
+
 export const useStore = create<VisualizerState>((set) => ({
   audioReady: false,
   setAudioReady: (ready) => set({ audioReady: ready }),
@@ -283,7 +323,7 @@ export const useStore = create<VisualizerState>((set) => ({
   setPerformanceControl: (key, value) => set({ [key]: value }),
 
   // Scene
-  currentScene: 'Cyber',
+  currentScene: 'Layered Stage',
   setCurrentScene: (scene) => set({ currentScene: scene }),
 
   // Text Engine Defaults
@@ -334,6 +374,21 @@ export const useStore = create<VisualizerState>((set) => ({
 
   isFullscreen: false,
   setIsFullscreen: (val) => set({ isFullscreen: val }),
+  liveMode: true,
+  setLiveMode: (val) => set({ liveMode: val }),
+  liveControls: defaultLiveControls,
+  setLiveControl: (key, value) => set((state) => ({
+    liveControls: {
+      ...state.liveControls,
+      [key]: value,
+    },
+  })),
+  setLiveControls: (values) => set((state) => ({
+    liveControls: {
+      ...state.liveControls,
+      ...values,
+    },
+  })),
   activeLeftPanel: 'Presets',
   setActiveLeftPanel: (panel) => set({ activeLeftPanel: panel }),
   autoVjEnabled: true,
@@ -343,7 +398,7 @@ export const useStore = create<VisualizerState>((set) => ({
   autoVjSensitivity: 1.0,
   musicCameraAmount: 0.8,
   transitionEnergy: 0.45,
-  audioDriveMode: 'mic',
+  audioDriveMode: 'api',
   visualMemories: loadStoredMemories(),
   visualScreens: defaultScreens,
   activeScreenId: 'A1',
@@ -413,6 +468,7 @@ export const useStore = create<VisualizerState>((set) => ({
     musicCameraAmount: state.musicCameraAmount ?? current.musicCameraAmount,
     transitionEnergy: state.transitionEnergy ?? current.transitionEnergy,
     audioDriveMode: state.audioDriveMode ?? current.audioDriveMode,
+    liveControls: state.liveControls ? { ...current.liveControls, ...state.liveControls } : current.liveControls,
   })),
   saveVisualMemory: () => set((state) => {
     const memory = createMemorySnapshot(state, `Memory ${Math.min(state.visualMemories.length + 1, 8)}`);
@@ -425,7 +481,38 @@ export const useStore = create<VisualizerState>((set) => ({
     return memory ? applyMemoryState(memory) : {};
   }),
   applyPreset: (presetId) => {
+    const look = getPresetLook(presetId);
+    if (look) {
+      set((state) => ({
+        ...look,
+        liveControls: {
+          ...state.liveControls,
+          selectedLookId: presetId,
+          selectedSceneId: look.currentScene,
+        },
+      }));
+      return;
+    }
     switch(presetId) {
+       case 'Layered Stage':
+          set({
+            currentScene: 'Layered Stage',
+            visualInputSource: 'api',
+            audioDriveMode: 'api',
+            baseColor: '#00c3ff',
+            secondaryColor: '#ff4f70',
+            accentColor: '#ffffff',
+            bgColor: '#020204',
+            bloomIntensity: 0.9,
+            rgbSplitAmount: 0,
+            distortion: 0,
+            glitchActive: false,
+            speed: 1,
+            chaos: 0.24,
+            musicCameraEnabled: true,
+            audioFxReactive: true
+          });
+          break;
        case 'Cyberpunk':
           set({ currentScene: 'Cyber', baseColor: '#00f3ff', secondaryColor: '#bf00ff', bloomIntensity: 2, textAnimStyle: 'Glitch' });
           break;

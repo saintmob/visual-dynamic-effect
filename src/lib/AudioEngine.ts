@@ -411,7 +411,10 @@ export class AudioEngine {
       else if (i >= 93 && i < 280) hmSum += val;
       else if (i >= 280) tSum += val;
     }
-    this.previousFrequencyFrame = new Uint8Array(data);
+    if (!this.previousFrequencyFrame || this.previousFrequencyFrame.length !== data.length) {
+      this.previousFrequencyFrame = new Uint8Array(data.length);
+    }
+    this.previousFrequencyFrame.set(data);
     const frequencyDelta = frequencyDeltaSum / length / 255;
 
     const subSense = config?.subBassSense ?? 1.0;

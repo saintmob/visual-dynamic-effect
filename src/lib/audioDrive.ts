@@ -18,7 +18,71 @@ export interface AudioDriveSnapshot {
   dynamicRange: number;
 }
 
+export type MusicTransportState = 'stopped' | 'playing' | 'paused';
+
+export interface MusicLayerDrive {
+  drums: number;
+  bassline: number;
+  melody: number;
+  theme: number;
+  fx: number;
+  experimental: number;
+}
+
+export interface MusicDriveFrame {
+  level: number;
+  rms: number;
+  peak: number;
+  beat: number;
+  activeStep: number;
+  stepProgress: number;
+  bpm: number;
+  styleEnergy: number;
+  styleId: string;
+  activePreset: string;
+  transport: MusicTransportState;
+  masterLevel: number;
+  slotLevels: number[];
+  slotActivity: number[];
+  slotIds: string[];
+  slotNames: string[];
+  slotCategories: string[];
+  frequencyBands: number[];
+  layers: MusicLayerDrive;
+  updatedAt: number;
+}
+
 const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
+
+const createEmptyMusicDriveFrame = (): MusicDriveFrame => ({
+  level: 0,
+  rms: 0,
+  peak: 0,
+  beat: 0,
+  activeStep: 0,
+  stepProgress: 0,
+  bpm: 120,
+  styleEnergy: 0,
+  styleId: '',
+  activePreset: '',
+  transport: 'stopped',
+  masterLevel: 0,
+  slotLevels: [],
+  slotActivity: [],
+  slotIds: [],
+  slotNames: [],
+  slotCategories: [],
+  frequencyBands: [],
+  layers: {
+    drums: 0,
+    bassline: 0,
+    melody: 0,
+    theme: 0,
+    fx: 0,
+    experimental: 0,
+  },
+  updatedAt: 0,
+});
 
 let musicProjectSnapshot: AudioDriveSnapshot = {
   volume: 0,
@@ -56,6 +120,7 @@ let remoteAudioSnapshot: AudioDriveSnapshot = {
   transient: 0,
   dynamicRange: 0,
 };
+let remoteMusicDriveFrame: MusicDriveFrame = createEmptyMusicDriveFrame();
 
 export function setMusicProjectSnapshot(next: Partial<AudioDriveSnapshot>) {
   musicProjectLastUpdate = typeof performance === 'undefined' ? Date.now() : performance.now();
@@ -107,6 +172,25 @@ export function setRemoteAudioSnapshot(next: Partial<AudioDriveSnapshot>, synced
     dynamicRange: Math.max(remoteAudioSnapshot.dynamicRange * 0.35, next.dynamicRange ?? remoteAudioSnapshot.dynamicRange),
   };
   audioEngine.setExternalSnapshot(remoteAudioSnapshot);
+}
+
+export function setRemoteMusicDriveFrame(next: Partial<MusicDriveFrame>) {
+  const now = typeof performance === 'undefined' ? Date.now() : performance.now();
+  remoteMusicDriveFrame = {
+    ...remoteMusicDriveFrame,
+    ...next,
+    layers: {
+      ...remoteMusicDriveFrame.layers,
+      ...next.layers,
+    },
+    slotLevels: next.slotLevels ? [...next.slotLevels] : remoteMusicDriveFrame.slotLevels,
+    slotActivity: next.slotActivity ? [...next.slotActivity] : remoteMusicDriveFrame.slotActivity,
+    slotIds: next.slotIds ? [...next.slotIds] : remoteMusicDriveFrame.slotIds,
+    slotNames: next.slotNames ? [...next.slotNames] : remoteMusicDriveFrame.slotNames,
+    slotCategories: next.slotCategories ? [...next.slotCategories] : remoteMusicDriveFrame.slotCategories,
+    frequencyBands: next.frequencyBands ? [...next.frequencyBands] : remoteMusicDriveFrame.frequencyBands,
+    updatedAt: now,
+  };
 }
 
 const pulse = (time: number, rate: number) => {
@@ -211,5 +295,59 @@ export function getAudioDriveSnapshot(mode: AudioDriveMode): AudioDriveSnapshot 
     spectralFlux: 0.18 + fastPulse * 0.58,
     transient: fastPulse > 0.82 ? 0.72 : fastPulse * 0.32,
     dynamicRange: 0.28 + fastPulse * 0.34,
+  };
+}
+
+export function getMusicDriveFrame(mode: AudioDriveMode): MusicDriveFrame {
+  const now = typeof performance === 'undefined' ? Date.now() : performance.now();
+  const age = now - remoteMusicDriveFrame.updatedAt;
+
+  if ((mode === 'api' || mode === 'music' || mode === 'mic') && remoteMusicDriveFrame.updatedAt > 0 && age < 2_500) {
+    const decay = age < 120 ? 1 : Math.max(0.25, 1 - (age - 120) / 2_380);
+    return {
+      ...remoteMusicDriveFrame,
+      level: remoteMusicDriveFrame.level * decay,
+      rms: remoteMusicDriveFrame.rms * decay,
+      peak: remoteMusicDriveFrame.peak * decay,
+      beat: remoteMusicDriveFrame.beat * decay,
+      styleEnergy: remoteMusicDriveFrame.styleEnergy * decay,
+      masterLevel: remoteMusicDriveFrame.masterLevel * decay,
+      layers: {
+        drums: remoteMusicDriveFrame.layers.drums * decay,
+        bassline: remoteMusicDriveFrame.layers.bassline * decay,
+        melody: remoteMusicDriveFrame.layers.melody * decay,
+        theme: remoteMusicDriveFrame.layers.theme * decay,
+        fx: remoteMusicDriveFrame.layers.fx * decay,
+        experimental: remoteMusicDriveFrame.layers.experimental * decay,
+      },
+    };
+  }
+
+  const audio = getAudioDriveSnapshot(mode);
+  const time = typeof performance === 'undefined' ? Date.now() * 0.001 : performance.now() * 0.001;
+  const step = Math.floor(time * 8) % 16;
+  const progress = (time * 8) % 1;
+
+  return {
+    ...createEmptyMusicDriveFrame(),
+    level: audio.volume,
+    rms: audio.energy,
+    peak: Math.max(audio.beat, audio.transient, audio.spectralFlux),
+    beat: audio.beat,
+    activeStep: step,
+    stepProgress: progress,
+    bpm: 120,
+    styleEnergy: audio.energy,
+    transport: 'playing',
+    masterLevel: audio.volume,
+    layers: {
+      drums: Math.max(audio.beat, audio.transient),
+      bassline: Math.max(audio.subBass, audio.bass),
+      melody: Math.max(audio.mid, audio.highMid),
+      theme: audio.energy,
+      fx: Math.max(audio.treble, audio.spectralFlux),
+      experimental: Math.max(audio.dynamicRange * 0.5, audio.spectralCentroid),
+    },
+    updatedAt: now,
   };
 }

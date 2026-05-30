@@ -29,6 +29,7 @@ export const screenText = {
       cut: 'Cut',
     },
     scenes: {
+      'Layered Stage': 'Layered Stage',
       Dumbar: 'Grey Glass',
       Topology: 'Sonic Topology',
       Liquid: 'Liquid',
@@ -67,6 +68,7 @@ export const screenText = {
       cut: '切换',
     },
     scenes: {
+      'Layered Stage': '分层舞台',
       Dumbar: '灰玻璃',
       Topology: '声波拓扑',
       Liquid: '流体',

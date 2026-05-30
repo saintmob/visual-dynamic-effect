@@ -20,7 +20,20 @@ export type ScreenPresentation = {
 const controlToken = SHOW_CONTROL_TOKEN;
 const databaseUrl = FIREBASE_DATABASE_URL;
 const showId = SHOW_ID;
-export const BAOFA_SCREEN_BASE_URL = 'http://localhost:4303/screen';
+
+function getBrowserProtocol() {
+  return typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'https:' : 'http:';
+}
+
+function getBrowserHost() {
+  return typeof window !== 'undefined' && window.location.hostname ? window.location.hostname : 'localhost';
+}
+
+export function getBaofaScreenBaseUrl() {
+  return `${getBrowserProtocol()}//${getBrowserHost()}:4303/screen`;
+}
+
+export const BAOFA_SCREEN_BASE_URL = getBaofaScreenBaseUrl();
 
 export const SHOW_SCREEN_IDS = [
   'A1',

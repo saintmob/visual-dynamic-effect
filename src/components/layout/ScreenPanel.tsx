@@ -3,6 +3,7 @@ import { Check, Monitor, Power, Projector, Smartphone, Sparkles, Tablet } from '
 import { getAudioDriveSnapshot } from '@/lib/audioDrive';
 import { getScreenSceneLabel, screenText } from '@/lib/screenText';
 import { useStore, type OutputDeviceType, type OutputMode, type ScreenTransitionStyle } from '@/store/useStore';
+import { visualModules } from '@/visuals/registry';
 
 const deviceIcon: Record<OutputDeviceType, typeof Monitor> = {
   stage: Monitor,
@@ -12,7 +13,7 @@ const deviceIcon: Record<OutputDeviceType, typeof Monitor> = {
   phone: Smartphone,
 };
 
-const scenes = ['Dumbar', 'Topology', 'Liquid', 'Chromaflux', 'Blue Font', 'Cyber', 'Pulse', 'Void'];
+const scenes = visualModules.map((module) => module.id);
 const outputModes: OutputMode[] = ['mirror', 'solo', 'split'];
 const transitionStyles: ScreenTransitionStyle[] = ['crossfade', 'scan', 'strobe', 'cut'];
 

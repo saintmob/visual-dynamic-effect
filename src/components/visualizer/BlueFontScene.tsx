@@ -4,7 +4,7 @@
  */
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { getAudioDriveSnapshot } from '@/lib/audioDrive';
+import { getAudioDriveSnapshot, type AudioDriveMode } from '@/lib/audioDrive';
 import { useStore } from '@/store/useStore';
 
 interface VisualSettings {
@@ -348,11 +348,39 @@ void main() {
 
 interface Props {
   settings: VisualSettings;
-  audioAnalysis: AudioAnalysis;
+  audioDriveMode: AudioDriveMode;
+  autoVjEnabled: boolean;
   isFullScreen: boolean;
 }
 
-const BlueFontCanvas: React.FC<Props> = ({ settings, audioAnalysis, isFullScreen }) => {
+type UniformLocations = Record<
+  | 'u_resolution'
+  | 'u_time'
+  | 'u_noise_scale_val'
+  | 'u_distortion_val'
+  | 'u_flow_speed_val'
+  | 'u_glow_intensity_val'
+  | 'u_color_preset'
+  | 'u_audio_volume'
+  | 'u_audio_bass'
+  | 'u_audio_mid'
+  | 'u_audio_high'
+  | 'u_beat_flash'
+  | 'u_mouse'
+  | 'u_mouse_influence'
+  | 'u_text_texture',
+  WebGLUniformLocation | null
+>;
+
+const defaultAudioAnalysis: AudioAnalysis = {
+  volume: 0,
+  bass: 0,
+  mid: 0,
+  high: 0,
+  beatIntensity: 0,
+};
+
+const BlueFontCanvas: React.FC<Props> = ({ settings, audioDriveMode, autoVjEnabled, isFullScreen }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const displayCanvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -373,25 +401,34 @@ const BlueFontCanvas: React.FC<Props> = ({ settings, audioAnalysis, isFullScreen
   // WebGL references
   const glRef = useRef<WebGL2RenderingContext | null>(null);
   const programRef = useRef<WebGLProgram | null>(null);
+  const positionBufferRef = useRef<WebGLBuffer | null>(null);
   const textTextureRef = useRef<WebGLTexture | null>(null);
+  const displayCtxRef = useRef<CanvasRenderingContext2D | null>(null);
+  const uniformLocationsRef = useRef<UniformLocations | null>(null);
   const timeRef = useRef<number>(0);
   const animationFrameRef = useRef<number | null>(null);
   const textureNeedsUpdateRef = useRef<boolean>(true);
 
-  // Keep references to settings and audioAnalysis to avoid loop re-registration
   const settingsRef = useRef(settings);
-  const audioAnalysisRef = useRef(audioAnalysis);
+  const audioDriveModeRef = useRef(audioDriveMode);
+  const autoVjEnabledRef = useRef(autoVjEnabled);
+  const audioAnalysisRef = useRef<AudioAnalysis>(defaultAudioAnalysis);
 
   useEffect(() => {
     settingsRef.current = settings;
   }, [settings]);
 
   useEffect(() => {
-    audioAnalysisRef.current = audioAnalysis;
-  }, [audioAnalysis]);
+    audioDriveModeRef.current = audioDriveMode;
+  }, [audioDriveMode]);
+
+  useEffect(() => {
+    autoVjEnabledRef.current = autoVjEnabled;
+  }, [autoVjEnabled]);
 
   // Track dimensions
   const [dimensions, setDimensions] = useState({ width: 800, height: 600 });
+  const dimensionsRef = useRef(dimensions);
 
   // Update text texture when visual changes occur
   useEffect(() => {
@@ -409,8 +446,11 @@ const BlueFontCanvas: React.FC<Props> = ({ settings, audioAnalysis, isFullScreen
       // Enforce minimum size boundary and set
       const w = Math.max(200, Math.floor(width));
       const h = Math.max(150, Math.floor(height));
-      setDimensions({ width: w, height: h });
-      textureNeedsUpdateRef.current = true;
+      setDimensions((current) => {
+        if (current.width === w && current.height === h) return current;
+        textureNeedsUpdateRef.current = true;
+        return { width: w, height: h };
+      });
     });
 
     resizeObserver.observe(containerRef.current);
@@ -419,11 +459,13 @@ const BlueFontCanvas: React.FC<Props> = ({ settings, audioAnalysis, isFullScreen
 
   // Update Canvas internal pixel sizes
   useEffect(() => {
+    dimensionsRef.current = dimensions;
     const displayCanvas = displayCanvasRef.current;
     if (!displayCanvas) return;
 
     displayCanvas.width = dimensions.width;
     displayCanvas.height = dimensions.height;
+    displayCtxRef.current = displayCanvas.getContext('2d');
 
     // Set up offscreen canvases matching dimensions
     if (!webglCanvasRef.current) {
@@ -461,6 +503,10 @@ const BlueFontCanvas: React.FC<Props> = ({ settings, audioAnalysis, isFullScreen
       return;
     }
 
+    if (glRef.current && programRef.current && uniformLocationsRef.current) {
+      return;
+    }
+
     glRef.current = gl;
 
     // Compile Vertex Shader
@@ -494,6 +540,8 @@ const BlueFontCanvas: React.FC<Props> = ({ settings, audioAnalysis, isFullScreen
       console.error('WebGL program linking failed:', gl.getProgramInfoLog(program));
       return;
     }
+    gl.deleteShader(vs);
+    gl.deleteShader(fs);
 
     programRef.current = program;
     gl.useProgram(program);
@@ -501,6 +549,7 @@ const BlueFontCanvas: React.FC<Props> = ({ settings, audioAnalysis, isFullScreen
     // Setup coordinates quad [-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1] - filling viewport
     const positionLocation = gl.getAttribLocation(program, 'position');
     const positionBuffer = gl.createBuffer();
+    positionBufferRef.current = positionBuffer;
     gl.bindBuffer(gl.ARRAY_BUFFER, positionBuffer);
     gl.bufferData(
       gl.ARRAY_BUFFER,
@@ -528,6 +577,23 @@ const BlueFontCanvas: React.FC<Props> = ({ settings, audioAnalysis, isFullScreen
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     textTextureRef.current = texture;
+    uniformLocationsRef.current = {
+      u_resolution: gl.getUniformLocation(program, 'u_resolution'),
+      u_time: gl.getUniformLocation(program, 'u_time'),
+      u_noise_scale_val: gl.getUniformLocation(program, 'u_noise_scale_val'),
+      u_distortion_val: gl.getUniformLocation(program, 'u_distortion_val'),
+      u_flow_speed_val: gl.getUniformLocation(program, 'u_flow_speed_val'),
+      u_glow_intensity_val: gl.getUniformLocation(program, 'u_glow_intensity_val'),
+      u_color_preset: gl.getUniformLocation(program, 'u_color_preset'),
+      u_audio_volume: gl.getUniformLocation(program, 'u_audio_volume'),
+      u_audio_bass: gl.getUniformLocation(program, 'u_audio_bass'),
+      u_audio_mid: gl.getUniformLocation(program, 'u_audio_mid'),
+      u_audio_high: gl.getUniformLocation(program, 'u_audio_high'),
+      u_beat_flash: gl.getUniformLocation(program, 'u_beat_flash'),
+      u_mouse: gl.getUniformLocation(program, 'u_mouse'),
+      u_mouse_influence: gl.getUniformLocation(program, 'u_mouse_influence'),
+      u_text_texture: gl.getUniformLocation(program, 'u_text_texture'),
+    };
   };
 
   // Render text onto the crisp 2D offscreen canvas
@@ -593,13 +659,24 @@ const BlueFontCanvas: React.FC<Props> = ({ settings, audioAnalysis, isFullScreen
       const program = programRef.current;
       const displayCanvas = displayCanvasRef.current;
       const webglCanvas = webglCanvasRef.current;
+      const displayCtx = displayCtxRef.current;
+      const uniforms = uniformLocationsRef.current;
 
-      if (!gl || !program || !displayCanvas || !webglCanvas) return;
+      if (!gl || !program || !displayCanvas || !webglCanvas || !displayCtx || !uniforms) return;
 
       const elapsed = (now - lastTime) / 1000;
       lastTime = now;
 
       const currentSettings = settingsRef.current;
+      const audio = getAudioDriveSnapshot(audioDriveModeRef.current);
+      const motionAmount = autoVjEnabledRef.current ? 1 : 0.35;
+      audioAnalysisRef.current = {
+        volume: audio.volume * motionAmount,
+        bass: Math.max(audio.subBass, audio.bass) * motionAmount,
+        mid: Math.max(audio.lowMid, audio.mid, audio.highMid) * motionAmount,
+        high: audio.treble * motionAmount,
+        beatIntensity: Math.max(audio.beat, audio.transient * 0.85, audio.spectralFlux * 0.7) * motionAmount,
+      };
       const currentAudio = audioAnalysisRef.current;
 
       // Update shader clock timeline
@@ -614,8 +691,10 @@ const BlueFontCanvas: React.FC<Props> = ({ settings, audioAnalysis, isFullScreen
         textureNeedsUpdateRef.current = false;
       }
 
+      const dims = dimensionsRef.current;
+
       // 1. Render in WebGL offscreen
-      gl.viewport(0, 0, dimensions.width, dimensions.height);
+      gl.viewport(0, 0, dims.width, dims.height);
       gl.clearColor(0, 0, 0, 1);
       gl.clear(gl.COLOR_BUFFER_BIT);
 
@@ -628,58 +707,49 @@ const BlueFontCanvas: React.FC<Props> = ({ settings, audioAnalysis, isFullScreen
       mouse.y += (mouse.targetY - mouse.y) * 0.15;
 
       // Set Shader Uniform values
-      gl.uniform2f(gl.getUniformLocation(program, 'u_resolution'), dimensions.width, dimensions.height);
-      gl.uniform1f(gl.getUniformLocation(program, 'u_time'), timeRef.current);
+      gl.uniform2f(uniforms.u_resolution, dims.width, dims.height);
+      gl.uniform1f(uniforms.u_time, timeRef.current);
       
-      gl.uniform1f(gl.getUniformLocation(program, 'u_noise_scale_val'), currentSettings.noiseScale);
-      gl.uniform1f(gl.getUniformLocation(program, 'u_distortion_val'), currentSettings.distortion);
-      gl.uniform1f(gl.getUniformLocation(program, 'u_flow_speed_val'), currentSettings.flowSpeed);
-      gl.uniform1f(gl.getUniformLocation(program, 'u_glow_intensity_val'), currentSettings.glowIntensity);
+      gl.uniform1f(uniforms.u_noise_scale_val, currentSettings.noiseScale);
+      gl.uniform1f(uniforms.u_distortion_val, currentSettings.distortion);
+      gl.uniform1f(uniforms.u_flow_speed_val, currentSettings.flowSpeed);
+      gl.uniform1f(uniforms.u_glow_intensity_val, currentSettings.glowIntensity);
       
       let presetIndex = 0;
       if (currentSettings.colorPreset === 'cyber') presetIndex = 1;
       if (currentSettings.colorPreset === 'toxic') presetIndex = 2;
       if (currentSettings.colorPreset === 'solar') presetIndex = 3;
       if (currentSettings.colorPreset === 'deepspace') presetIndex = 4;
-      gl.uniform1i(gl.getUniformLocation(program, 'u_color_preset'), presetIndex);
+      gl.uniform1i(uniforms.u_color_preset, presetIndex);
 
       // Bind Audio uniform buffers
-      gl.uniform1f(gl.getUniformLocation(program, 'u_audio_volume'), currentAudio.volume);
-      gl.uniform1f(gl.getUniformLocation(program, 'u_audio_bass'), currentAudio.bass);
-      gl.uniform1f(gl.getUniformLocation(program, 'u_audio_mid'), currentAudio.mid);
-      gl.uniform1f(gl.getUniformLocation(program, 'u_audio_high'), currentAudio.high);
-      gl.uniform1f(gl.getUniformLocation(program, 'u_beat_flash'), currentSettings.enableBeatGlitches ? currentAudio.beatIntensity : 0.0);
+      gl.uniform1f(uniforms.u_audio_volume, currentAudio.volume);
+      gl.uniform1f(uniforms.u_audio_bass, currentAudio.bass);
+      gl.uniform1f(uniforms.u_audio_mid, currentAudio.mid);
+      gl.uniform1f(uniforms.u_audio_high, currentAudio.high);
+      gl.uniform1f(uniforms.u_beat_flash, currentSettings.enableBeatGlitches ? currentAudio.beatIntensity : 0.0);
 
       // Bind Pointer interaction coordinates
-      gl.uniform2f(gl.getUniformLocation(program, 'u_mouse'), mouse.x, mouse.y);
-      gl.uniform1f(gl.getUniformLocation(program, 'u_mouse_influence'), mouse.influence);
+      gl.uniform2f(uniforms.u_mouse, mouse.x, mouse.y);
+      gl.uniform1f(uniforms.u_mouse_influence, mouse.influence);
 
       // Bind Texture Unit 0
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, textTextureRef.current);
-      gl.uniform1i(gl.getUniformLocation(program, 'u_text_texture'), 0);
+      gl.uniform1i(uniforms.u_text_texture, 0);
 
       // Draw Screen Quad
       gl.drawArrays(gl.TRIANGLES, 0, 6);
 
       // 2. Perform 2D Trails Composition onto Visible Canvas 2D
-      const displayCtx = displayCanvas.getContext('2d');
-      if (displayCtx) {
-        // Clear background with semi-transparent clear color to composite motion blur trials!
-        // Adjust decay level. If settings.motionBlur = 0, opacity is 1.0 (no trials). If 10, opacity is 0.05 (extremely long trails)
-        const trailAlpha = 1.0 - (currentSettings.motionBlur / 10) * 0.92;
-        
-        displayCtx.fillStyle = currentSettings.backgroundColor || '#000000';
-        
-        // Draw slightly transparent clear color to fade previous frames out gradually
-        displayCtx.globalCompositeOperation = 'source-over';
-        displayCtx.globalAlpha = trailAlpha;
-        displayCtx.fillRect(0, 0, dimensions.width, dimensions.height);
-
-        // Overlay current crisp shader output
-        displayCtx.globalAlpha = 1.0;
-        displayCtx.drawImage(webglCanvas, 0, 0);
-      }
+      // Clear background with semi-transparent clear color to composite motion blur trials.
+      const trailAlpha = 1.0 - (currentSettings.motionBlur / 10) * 0.92;
+      displayCtx.fillStyle = currentSettings.backgroundColor || '#000000';
+      displayCtx.globalCompositeOperation = 'source-over';
+      displayCtx.globalAlpha = trailAlpha;
+      displayCtx.fillRect(0, 0, dims.width, dims.height);
+      displayCtx.globalAlpha = 1.0;
+      displayCtx.drawImage(webglCanvas, 0, 0);
     };
 
     animationFrameRef.current = requestAnimationFrame(loop);
@@ -688,8 +758,19 @@ const BlueFontCanvas: React.FC<Props> = ({ settings, audioAnalysis, isFullScreen
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
       }
+      const gl = glRef.current;
+      if (gl) {
+        if (positionBufferRef.current) gl.deleteBuffer(positionBufferRef.current);
+        if (textTextureRef.current) gl.deleteTexture(textTextureRef.current);
+        if (programRef.current) gl.deleteProgram(programRef.current);
+      }
+      glRef.current = null;
+      programRef.current = null;
+      positionBufferRef.current = null;
+      textTextureRef.current = null;
+      uniformLocationsRef.current = null;
     };
-  }, [dimensions]);
+  }, []);
 
   // Handle Touch or Mouse moves to feed ripples
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
@@ -768,13 +849,6 @@ export function BlueFontScene() {
     textGlow,
     textInput,
   } = useStore();
-  const [audioAnalysis, setAudioAnalysis] = useState<AudioAnalysis>({
-    volume: 0,
-    bass: 0,
-    mid: 0,
-    high: 0,
-    beatIntensity: 0,
-  });
 
   const settings = useMemo<VisualSettings>(() => ({
     text: textInput.trim() || 'BLUE\nFONT',
@@ -791,29 +865,11 @@ export function BlueFontScene() {
     enableBeatGlitches: autoVjEnabled,
   }), [autoVjEnabled, bgColor, chaos, distortion, speed, textFontSize, textFontWeight, textGlow, textInput]);
 
-  useEffect(() => {
-    let frame = 0;
-    const tick = () => {
-      const audio = getAudioDriveSnapshot(audioDriveMode);
-      const motionAmount = autoVjEnabled ? 1 : 0.35;
-      setAudioAnalysis({
-        volume: audio.volume * motionAmount,
-        bass: Math.max(audio.subBass, audio.bass) * motionAmount,
-        mid: Math.max(audio.lowMid, audio.mid, audio.highMid) * motionAmount,
-        high: audio.treble * motionAmount,
-        beatIntensity: Math.max(audio.beat, audio.transient * 0.85, audio.spectralFlux * 0.7) * motionAmount,
-      });
-      frame = requestAnimationFrame(tick);
-    };
-
-    tick();
-    return () => cancelAnimationFrame(frame);
-  }, [audioDriveMode, autoVjEnabled]);
-
   return (
     <BlueFontCanvas
       settings={settings}
-      audioAnalysis={audioAnalysis}
+      audioDriveMode={audioDriveMode}
+      autoVjEnabled={autoVjEnabled}
       isFullScreen={false}
     />
   );

@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useStore } from '@/store/useStore';
 import { createShowControlClient, type ControlCommand } from '@/lib/showControlClient';
+import { applyLiveControlPatch, LIVE_CONTROL_NUMERIC_KEYS, LIVE_PAD_DEFINITIONS } from '@/lib/liveControls';
 import { ShowRuntimeSettingsPanel } from '@/components/ShowRuntimeSettingsPanel';
 import type { AudioDriveMode } from '@/lib/audioDrive';
-import type { VisualInputSource } from '@/store/useStore';
+import type { LiveControls, VisualInputSource } from '@/store/useStore';
+import { getVisualModule, getVisualModuleByPreset, visualModules } from '@/visuals/registry';
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === 'object' && !Array.isArray(value);
@@ -11,16 +13,9 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const toNumber = (value: unknown, fallback: number) =>
   typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 
-const scenePresetMap: Record<string, string> = {
-  Cyber: 'Cyberpunk',
-  Liquid: 'Liquid Dream',
-  Chromaflux: 'Chromaflux',
-  'Blue Font': 'Blue Font',
-  Topology: 'Sonic Topology',
-  Pulse: 'Neon Pulse',
-  Void: 'Dark Space',
-  Dumbar: 'Dumbar Base',
-};
+const scenePresetMap: Record<string, string> = Object.fromEntries(
+  visualModules.map((module) => [module.id, module.presetId]),
+);
 
 const createIdFragment = () => {
   const uuid = globalThis.crypto?.randomUUID?.();
@@ -38,7 +33,7 @@ export function ShowControlBridge({ showStatus = true }: { showStatus?: boolean 
       module: 'visual',
       clientId: clientIdRef.current,
       role: 'vj',
-      capabilities: ['module.statePatch', 'control.command', 'visual.scene', 'visual.fx', 'visual.text'],
+      capabilities: ['module.statePatch', 'control.command', 'visual.scene', 'visual.fx', 'visual.text', 'visual.liveControls'],
       onStatus: setStatus,
       onCommand: (command) => applyVisualCommand(command),
     });
@@ -80,6 +75,7 @@ export function ShowControlBridge({ showStatus = true }: { showStatus?: boolean 
     },
     audioDriveMode: store.audioDriveMode,
     inputSource: store.visualInputSource,
+    liveControls: store.liveControls,
     fullscreen: store.isFullscreen,
     visualMemories: store.visualMemories.map((memory) => ({
       id: memory.id,
@@ -112,6 +108,7 @@ export function ShowControlBridge({ showStatus = true }: { showStatus?: boolean 
     store.textLetterSpacing,
     store.audioDriveMode,
     store.visualInputSource,
+    store.liveControls,
     store.isFullscreen,
     store.visualMemories,
   ]);
@@ -164,6 +161,10 @@ function applyVisualCommand(command: ControlCommand) {
     if (typeof value.chaos === 'number') state.setPerformanceControl('chaos', value.chaos);
   } else if (command.command === 'setAudioDrive' && typeof value === 'string') {
     applyRemoteAudioDrive(value);
+  } else if ((command.command === 'setLiveControls' || command.command === 'setLivePads') && isRecord(value)) {
+    applyRemoteLiveControls(readLiveControlsPatch(value));
+  } else if (command.command === 'setLivePad' && isRecord(value)) {
+    applyRemoteLivePad(value);
   } else if (command.command === 'setFullscreen') {
     state.setIsFullscreen(Boolean(value));
   } else if (command.command === 'setIntensity') {
@@ -183,15 +184,49 @@ function applyRemoteAudioDrive(value: string) {
 
 function applyRemoteScene(scene: string) {
   const state = useStore.getState();
-  const preset = scenePresetMap[scene];
-  if (preset) state.applyPreset(preset);
+  const module = getVisualModule(scene);
+  if (module) {
+    state.applyPreset(module.presetId);
+    state.setCurrentScene(module.id);
+    return;
+  }
   state.setCurrentScene(scene);
 }
 
 function applyRemotePreset(presetOrScene: string) {
   const state = useStore.getState();
-  const preset = scenePresetMap[presetOrScene] || presetOrScene;
+  const preset = scenePresetMap[presetOrScene] || getVisualModuleByPreset(presetOrScene)?.presetId || presetOrScene;
   state.applyPreset(preset);
-  const scene = Object.entries(scenePresetMap).find(([, mappedPreset]) => mappedPreset === preset)?.[0];
+  const scene = getVisualModuleByPreset(preset)?.id;
   if (scene) state.setCurrentScene(scene);
+}
+
+function readLiveControlsPatch(value: Record<string, unknown>): Partial<LiveControls> {
+  const patch: Partial<LiveControls> = {};
+  for (const [key, entry] of Object.entries(value)) {
+    if (key === 'selectedLookId' || key === 'selectedSceneId') {
+      if (typeof entry === 'string') patch[key] = entry as never;
+      continue;
+    }
+    if (LIVE_CONTROL_NUMERIC_KEYS.includes(key as keyof LiveControls) && typeof entry === 'number' && Number.isFinite(entry)) {
+      patch[key as keyof LiveControls] = Math.max(0, Math.min(1, entry)) as never;
+    }
+  }
+  return patch;
+}
+
+function applyRemoteLiveControls(patch: Partial<LiveControls>) {
+  useStore.setState((state) => {
+    return applyLiveControlPatch(state.liveControls, patch);
+  });
+}
+
+function applyRemoteLivePad(value: Record<string, unknown>) {
+  const pad = typeof value.pad === 'string' ? value.pad : '';
+  const x = typeof value.x === 'number' ? Math.max(0, Math.min(1, value.x)) : undefined;
+  const y = typeof value.y === 'number' ? Math.max(0, Math.min(1, value.y)) : undefined;
+  if (x === undefined || y === undefined) return;
+  const definition = LIVE_PAD_DEFINITIONS.find((item) => item.id === pad.toLowerCase() || item.title.toLowerCase() === pad.toLowerCase());
+  if (!definition) return;
+  applyRemoteLiveControls({ [definition.xKey]: x, [definition.yKey]: y } as Partial<LiveControls>);
 }

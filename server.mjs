@@ -53,6 +53,10 @@ wss.on('connection', (socket) => {
         broadcast({ type: 'screen-state', payload: latestState }, socket);
       }
 
+      if (message.type === 'controller-signal') {
+        broadcast({ type: 'screen-signal', payload: message.payload }, socket);
+      }
+
       if (message.type === 'screen-hello') {
         send(socket, {
           type: 'sync-status',

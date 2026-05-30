@@ -39,6 +39,7 @@ const controlToken = SHOW_CONTROL_TOKEN;
 const databaseUrl = FIREBASE_DATABASE_URL;
 const showId = SHOW_ID;
 const transport = SHOW_TRANSPORT;
+const WS_RECONNECT_MAX_MS = 15_000;
 
 export function createShowControlClient(options: ClientOptions) {
   if (!controlToken.trim()) {
@@ -97,6 +98,7 @@ function createWebSocketClient(options: ClientOptions) {
   let closed = false;
   let lastPatch = '';
   let pendingPatch: Record<string, unknown> | null = null;
+  let reconnectFailures = 0;
 
   const send = (message: Record<string, unknown>) => {
     if (socket?.readyState === WebSocket.OPEN) {
@@ -110,6 +112,7 @@ function createWebSocketClient(options: ClientOptions) {
     socket = new WebSocket(controlToken ? `${wsUrl}${wsUrl.includes('?') ? '&' : '?'}token=${encodeURIComponent(controlToken)}` : wsUrl);
 
     socket.addEventListener('open', () => {
+      reconnectFailures = 0;
       options.onStatus?.('connected');
       send({
         type: 'client.hello',
@@ -141,7 +144,9 @@ function createWebSocketClient(options: ClientOptions) {
       options.onStatus?.('offline');
       if (heartbeatTimer) window.clearInterval(heartbeatTimer);
       heartbeatTimer = null;
-      reconnectTimer = window.setTimeout(connect, 1200);
+      reconnectFailures += 1;
+      const reconnectDelay = Math.min(WS_RECONNECT_MAX_MS, 1200 * 2 ** Math.min(4, reconnectFailures - 1));
+      reconnectTimer = window.setTimeout(connect, reconnectDelay);
     });
 
     socket.addEventListener('error', () => {
