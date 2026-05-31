@@ -10,6 +10,7 @@ import { getVisualModule } from '@/visuals/registry';
 import { BlueFontScene } from './BlueFontScene';
 import { LayeredStageScene } from './LayeredStageScene';
 import { PurpleScene } from './PurpleScene';
+import { VideoFlowScene } from './VideoFlowScene';
 
 const REACTIVE_AUDIO_FRAME_MS = 1000 / 60;
 let reactiveAudioCache:
@@ -3618,7 +3619,9 @@ function VisualizerInner({ screenIdOverride }: { screenIdOverride?: string } = {
       className="absolute inset-0 h-full min-h-0 w-full overflow-hidden"
       style={{ filter: `contrast(${contrast}) brightness(${brightness}) saturate(${saturation})` }}
     >
-      {effectiveScene === 'Layered Stage' ? (
+      {effectiveScene === 'Video Flow' ? (
+        <VideoFlowScene />
+      ) : effectiveScene === 'Layered Stage' ? (
         <LayeredStageScene />
       ) : effectiveScene === 'Blue Font' ? (
         <BlueFontScene />

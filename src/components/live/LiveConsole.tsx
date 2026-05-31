@@ -5,6 +5,7 @@ import { getAudioDriveSnapshot } from '@/lib/audioDrive';
 import type { AudioDebugSnapshot } from '@/lib/AudioEngine';
 import { applyLiveControlPatch, getLivePadPatch, LIVE_PAD_DEFINITIONS } from '@/lib/liveControls';
 import { getScreenSceneLabel } from '@/lib/screenText';
+import { getVisualDescription } from '@/lib/visualLabels';
 import { useStore, type VisualInputSource } from '@/store/useStore';
 import { liveVisualModules } from '@/visuals/registry';
 import { LivePad } from './LivePad';
@@ -58,6 +59,7 @@ const liveCopy = {
       atmosphere: ['Atmosphere Pad', 'glow / camera depth', 'Glow', 'Depth'],
     },
     descriptions: {
+      'Video Flow': 'No-text cyan-violet ribbons with protected highlights',
       'Layered Stage': 'Low-cost layered DJ-reactive stage',
       Purple: 'Liquid holographic purple stream',
       'Blue Font': 'Liquid chrome blue typography',
@@ -256,7 +258,9 @@ export function LiveConsole({ audioReady, audioDebug, initError, micStatusText, 
                 }`}
               >
                 <div className="text-[11px] font-black uppercase tracking-widest">{getScreenSceneLabel(language, module.id)}</div>
-                <div className={`mt-1 text-[10px] leading-snug ${currentScene === module.id ? 'text-black/55' : 'text-white/35'}`}>{copy.descriptions[module.id] || module.description}</div>
+                <div className={`mt-1 text-[10px] leading-snug ${currentScene === module.id ? 'text-black/55' : 'text-white/35'}`}>
+                  {copy.descriptions[module.id as keyof typeof copy.descriptions] || getVisualDescription(language, module.id, module.description)}
+                </div>
               </button>
             ))}
           </div>

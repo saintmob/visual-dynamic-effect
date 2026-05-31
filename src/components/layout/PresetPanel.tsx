@@ -1,6 +1,7 @@
 import { useStore } from '@/store/useStore';
 import { Monitor } from 'lucide-react';
 import { t } from '@/lib/i18n';
+import { getVisualDescription, getVisualLabel } from '@/lib/visualLabels';
 import { visualModules } from '@/visuals/registry';
 
 export function PresetPanel() {
@@ -9,8 +10,8 @@ export function PresetPanel() {
   
   const presets = visualModules.map((module) => ({
     id: module.presetId,
-    name: module.label,
-    desc: module.description,
+    name: getVisualLabel(language, module.id),
+    desc: getVisualDescription(language, module.id, module.description),
     scene: module.defaultLook.currentScene,
   }));
 

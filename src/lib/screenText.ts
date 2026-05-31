@@ -1,4 +1,5 @@
 import type { OutputMode, ScreenTransitionStyle } from '@/store/useStore';
+import { getVisualLabel } from './visualLabels';
 
 export const screenText = {
   EN: {
@@ -85,4 +86,4 @@ export const screenText = {
 
 export const getOutputModeLabel = (language: 'EN' | 'ZH', mode: OutputMode) => screenText[language].modes[mode];
 export const getTransitionLabel = (language: 'EN' | 'ZH', style: ScreenTransitionStyle) => screenText[language].transitions[style];
-export const getScreenSceneLabel = (language: 'EN' | 'ZH', scene: string) => screenText[language].scenes[scene as keyof typeof screenText.EN.scenes] || scene;
+export const getScreenSceneLabel = (language: 'EN' | 'ZH', scene: string) => screenText[language].scenes[scene as keyof typeof screenText.EN.scenes] || getVisualLabel(language, scene);
