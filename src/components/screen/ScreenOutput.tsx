@@ -14,9 +14,9 @@ export function ScreenOutput({ screenId }: { screenId: string }) {
     showMenu: false,
   });
   const [routeError, setRouteError] = useState('');
-  const { language, visualScreens } = useStore();
+  const language = useStore((state) => state.language);
+  const screen = useStore((state) => state.visualScreens.find((item) => item.id === screenId));
   const labels = screenText[language];
-  const screen = visualScreens.find((item) => item.id === screenId);
   const connected = !routeError;
 
   useEffect(() => {
