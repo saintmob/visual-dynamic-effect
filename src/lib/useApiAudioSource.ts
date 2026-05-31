@@ -10,7 +10,6 @@ import {
   type MusicTransportState,
 } from '@/lib/audioDrive';
 
-const API_ENDPOINT = `${SHOW_BACKEND_URL}/api/audio-summary`;
 const FALLBACK_POLL_INTERVAL_MS = 500;
 const FALLBACK_STALE_MS = 250;
 const FALLBACK_BACKOFF_MAX_MS = 10_000;
@@ -20,6 +19,7 @@ const wsUrl = SHOW_WS_URL;
 const controlToken = SHOW_CONTROL_TOKEN;
 const databaseUrl = FIREBASE_DATABASE_URL;
 const showId = SHOW_ID;
+const API_ENDPOINT = withRoom(`${SHOW_BACKEND_URL}/api/audio-summary`);
 
 export function useApiAudioSource(enabled: boolean) {
   const intervalRef = useRef<number | null>(null);
@@ -87,7 +87,7 @@ export function useApiAudioSource(enabled: boolean) {
       if (disposed) return;
       if (!isUsableWebSocketUrl(wsUrl)) return;
 
-      const socket = new WebSocket(`${wsUrl}${wsUrl.includes('?') ? '&' : '?'}token=${encodeURIComponent(controlToken)}`);
+      const socket = new WebSocket(withQuery(wsUrl, { room: showId, token: controlToken }));
       socketRef.current = socket;
 
       socket.addEventListener('open', () => {
@@ -189,6 +189,20 @@ function shouldReadFirebaseAudio() {
 
 function firebaseJsonUrl(path: string) {
   return `${databaseUrl}/${path}.json`;
+}
+
+function withRoom(url: string) {
+  const next = new URL(url);
+  if (showId) next.searchParams.set('room', showId);
+  return next.toString();
+}
+
+function withQuery(url: string, params: Record<string, string | undefined>) {
+  const next = new URL(url);
+  for (const [key, value] of Object.entries(params)) {
+    if (value) next.searchParams.set(key, value);
+  }
+  return next.toString();
 }
 
 function safePath(value: string) {
