@@ -7,10 +7,12 @@ import { liquidModule } from './liquid';
 import { pulseModule } from './pulse';
 import { purpleModule } from './purple';
 import { topologyModule } from './topology';
+import { videoFlowModule } from './video-flow';
 import { voidModule } from './void';
 import type { VisualLookDefaults, VisualModuleDefinition, VisualSceneId } from './types';
 
 export const visualModules: VisualModuleDefinition[] = [
+  videoFlowModule,
   layeredStageModule,
   purpleModule,
   blueFontModule,

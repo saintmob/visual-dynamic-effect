@@ -282,8 +282,8 @@ const defaultLiveControls: LiveControls = {
   textureY: 0.32,
   atmosphereX: 0.52,
   atmosphereY: 0.44,
-  selectedLookId: 'Layered Stage',
-  selectedSceneId: 'Layered Stage',
+  selectedLookId: 'Video Flow',
+  selectedSceneId: 'Video Flow',
 };
 
 export const useStore = create<VisualizerState>((set) => ({
@@ -325,11 +325,11 @@ export const useStore = create<VisualizerState>((set) => ({
   setPerformanceControl: (key, value) => set({ [key]: value }),
 
   // Scene
-  currentScene: 'Layered Stage',
+  currentScene: 'Video Flow',
   setCurrentScene: (scene) => set({ currentScene: scene }),
 
   // Text Engine Defaults
-  textInput: 'GAFA',
+  textInput: '',
   textAnimStyle: 'Glitch',
   textGlow: 1.0,
   textSpeed: 1.0,
