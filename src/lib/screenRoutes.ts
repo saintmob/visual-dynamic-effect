@@ -20,7 +20,20 @@ export type ScreenPresentation = {
 const controlToken = SHOW_CONTROL_TOKEN;
 const databaseUrl = FIREBASE_DATABASE_URL;
 const showId = SHOW_ID;
-export const BAOFA_SCREEN_BASE_URL = 'http://localhost:4303/screen';
+
+function getBrowserProtocol() {
+  return typeof window !== 'undefined' && window.location.protocol === 'https:' ? 'https:' : 'http:';
+}
+
+function getBrowserHost() {
+  return typeof window !== 'undefined' && window.location.hostname ? window.location.hostname : 'localhost';
+}
+
+export function getBaofaScreenBaseUrl() {
+  return `${getBrowserProtocol()}//${getBrowserHost()}:4303/screen`;
+}
+
+export const BAOFA_SCREEN_BASE_URL = getBaofaScreenBaseUrl();
 
 export const SHOW_SCREEN_IDS = [
   'A1',
@@ -36,10 +49,22 @@ export async function fetchScreenState(signal?: AbortSignal): Promise<{
   presentation: ScreenPresentation;
 }> {
   if (!controlToken.trim()) throw new Error('Control token is required');
-  const state = shouldReadFirebaseState()
-    ? await fetchFirebaseState(signal)
-    : await fetchBackendState(signal);
+  const state = await fetchAuthoritativeState(signal);
   return normalizeScreenState(state);
+}
+
+async function fetchAuthoritativeState(signal?: AbortSignal) {
+  const backendFirst = shouldPreferBackendState();
+  const primary = backendFirst ? fetchBackendState : fetchFirebaseState;
+  const fallback = backendFirst ? fetchFirebaseState : fetchBackendState;
+
+  try {
+    return await primary(signal);
+  } catch (error) {
+    if (!databaseUrl && backendFirst) throw error;
+    if (!SHOW_BACKEND_URL && !backendFirst) throw error;
+    return fallback(signal);
+  }
 }
 
 async function fetchBackendState(signal?: AbortSignal) {
@@ -75,6 +100,23 @@ function shouldReadFirebaseState() {
   if (SHOW_TRANSPORT === 'firebase') return true;
   if (SHOW_TRANSPORT === 'websocket' || SHOW_TRANSPORT === 'cloudflare') return !isUsableWebSocketUrl();
   return !isUsableWebSocketUrl();
+}
+
+function shouldPreferBackendState() {
+  if (isLocalRuntime()) return true;
+  return !shouldReadFirebaseState();
+}
+
+function isLocalRuntime() {
+  if (typeof window === 'undefined') return false;
+  const hostname = window.location.hostname;
+  return hostname === 'localhost' ||
+    hostname === '127.0.0.1' ||
+    hostname === '0.0.0.0' ||
+    hostname.endsWith('.local') ||
+    /^10\./.test(hostname) ||
+    /^192\.168\./.test(hostname) ||
+    /^172\.(1[6-9]|2\d|3[0-1])\./.test(hostname);
 }
 
 function isUsableWebSocketUrl() {

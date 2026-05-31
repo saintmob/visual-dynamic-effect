@@ -1,22 +1,18 @@
 import { useStore } from '@/store/useStore';
 import { Monitor } from 'lucide-react';
 import { t } from '@/lib/i18n';
+import { visualModules } from '@/visuals/registry';
 
 export function PresetPanel() {
   const { applyPreset, currentScene, language } = useStore();
   const strings = t[language];
   
-  const presets = [
-    { id: 'Dumbar Base', name: strings.PRESET_DUMBAR || 'Grey Glass Blocks', desc: strings.PRESET_DUMBAR_DESC || 'Refractive tiles distorting text', scene: 'Dumbar' },
-    { id: 'Sonic Topology', name: strings.PRESET_TOPOLOGY || 'Sonic Topology', desc: strings.PRESET_TOPOLOGY_DESC || 'Liquified contour type', scene: 'Topology' },
-    { id: 'Liquid Dream', name: strings.PRESET_LIQUID || 'Liquid Dream', desc: strings.PRESET_LIQUID_DESC || 'Slow purple fluid', scene: 'Liquid' },
-    { id: 'Chromaflux', name: strings.PRESET_CHROMAFLUX || 'Chromaflux', desc: strings.PRESET_CHROMAFLUX_DESC || 'Thermal liquid river', scene: 'Chromaflux' },
-    { id: 'Blue Font', name: strings.PRESET_BLUE_FONT || 'Blue Font', desc: strings.PRESET_BLUE_FONT_DESC || 'Liquid chrome blue typography', scene: 'Blue Font' },
-    { id: 'Cyberpunk', name: strings.PRESET_CYBER || 'Cyberpunk', desc: strings.PRESET_CYBER_DESC || 'Neon blue, high glitch', scene: 'Cyber' },
-    { id: 'Dark Space', name: strings.PRESET_VOID || 'Dark Space', desc: strings.PRESET_VOID_DESC || 'Monochrome void', scene: 'Void' },
-    { id: 'Neon Pulse', name: strings.PRESET_PULSE || 'Neon Pulse', desc: strings.PRESET_PULSE_DESC || 'Aggressive pink bass', scene: 'Pulse' },
-    { id: 'Purple', name: strings.PRESET_PURPLE || 'Purple', desc: strings.PRESET_PURPLE_DESC || 'Liquid holographic purple stream', scene: 'Purple' },
-  ];
+  const presets = visualModules.map((module) => ({
+    id: module.presetId,
+    name: module.label,
+    desc: module.description,
+    scene: module.defaultLook.currentScene,
+  }));
 
   return (
     <div className="w-full p-6 flex flex-col gap-6">

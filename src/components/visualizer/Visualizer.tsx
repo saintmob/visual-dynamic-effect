@@ -3,10 +3,12 @@ import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { EffectComposer, Bloom, Glitch, ChromaticAberration } from '@react-three/postprocessing';
 import { GlitchMode, BlendFunction } from 'postprocessing';
 import * as THREE from 'three';
-import { getAudioDriveSnapshot } from '@/lib/audioDrive';
+import { getAudioDriveSnapshot, getMusicDriveFrame } from '@/lib/audioDrive';
 import { getOutputModeLabel, getTransitionLabel, screenText } from '@/lib/screenText';
 import { useStore } from '@/store/useStore';
+import { getVisualModule } from '@/visuals/registry';
 import { BlueFontScene } from './BlueFontScene';
+import { LayeredStageScene } from './LayeredStageScene';
 import { PurpleScene } from './PurpleScene';
 
 const REACTIVE_AUDIO_FRAME_MS = 1000 / 60;
@@ -16,7 +18,8 @@ let reactiveAudioCache:
 
 function getReactiveAudio() {
   const { audioDriveMode, autoVjEnabled } = useStore.getState();
-  const frame = Math.floor((typeof performance === 'undefined' ? Date.now() : performance.now()) / REACTIVE_AUDIO_FRAME_MS);
+  const now = typeof performance === 'undefined' ? Date.now() : performance.now();
+  const frame = Math.floor(now / REACTIVE_AUDIO_FRAME_MS);
   if (
     reactiveAudioCache &&
     reactiveAudioCache.frame === frame &&
@@ -295,7 +298,11 @@ function AudioMutationOverlay({ sceneOverride }: { sceneOverride?: string }) {
     phrase: 0,
     gravity: 0,
   });
-  const { baseColor, secondaryColor, accentColor, bgColor, currentScene } = useStore();
+  const baseColor = useStore((state) => state.baseColor);
+  const secondaryColor = useStore((state) => state.secondaryColor);
+  const accentColor = useStore((state) => state.accentColor);
+  const bgColor = useStore((state) => state.bgColor);
+  const currentScene = useStore((state) => state.currentScene);
   const scene = sceneOverride || currentScene;
   const disabled = scene === 'Void' || scene === 'Topology' || scene === 'Pulse';
 
@@ -1438,7 +1445,7 @@ const cyberFragment = `
 `;
 
 function VoidScene() {
-  const { speed } = useStore();
+  const speed = useStore((state) => state.speed);
   const stageMatRef = useRef<THREE.ShaderMaterial>(null);
 
   useFrame((state) => {
@@ -1751,7 +1758,11 @@ const chromafluxFragment = `
 `;
 
 function LiquidScene() {
-  const { speed, baseColor, secondaryColor, accentColor, bgColor } = useStore();
+  const speed = useStore((state) => state.speed);
+  const baseColor = useStore((state) => state.baseColor);
+  const secondaryColor = useStore((state) => state.secondaryColor);
+  const accentColor = useStore((state) => state.accentColor);
+  const bgColor = useStore((state) => state.bgColor);
   const materialRef = useRef<THREE.ShaderMaterial>(null);
   const liquidTimeRef = useRef(0);
   const liquidSpeedRef = useRef(0.16);
@@ -1806,7 +1817,11 @@ function LiquidScene() {
 }
 
 function ChromaScene() {
-  const { speed, baseColor, secondaryColor, accentColor, bgColor } = useStore();
+  const speed = useStore((state) => state.speed);
+  const baseColor = useStore((state) => state.baseColor);
+  const secondaryColor = useStore((state) => state.secondaryColor);
+  const accentColor = useStore((state) => state.accentColor);
+  const bgColor = useStore((state) => state.bgColor);
   const materialRef = useRef<THREE.ShaderMaterial>(null);
   const chromaTimeRef = useRef(0);
   const chromaSpeedRef = useRef(0.12);
@@ -1860,7 +1875,12 @@ function ChromaScene() {
 
 // 3. CYBER GRID (Perspective lines and glitching geometry)
 function CyberScene() {
-  const { speed, baseColor, textInput, textFontSize, textLetterSpacing, textFontWeight } = useStore();
+  const speed = useStore((state) => state.speed);
+  const baseColor = useStore((state) => state.baseColor);
+  const textInput = useStore((state) => state.textInput);
+  const textFontSize = useStore((state) => state.textFontSize);
+  const textLetterSpacing = useStore((state) => state.textLetterSpacing);
+  const textFontWeight = useStore((state) => state.textFontWeight);
   const matRef = useRef<THREE.ShaderMaterial>(null);
   
   const textTexture = useTextTexture(textInput, textFontSize, textLetterSpacing, textFontWeight);
@@ -2012,7 +2032,13 @@ function useTopologyTexture(text: string, blurIntensity: number) {
 }
 
 function TopologyScene() {
-  const { speed, chaos, distortion, textInput, baseColor, secondaryColor, bloomIntensity } = useStore();
+  const speed = useStore((state) => state.speed);
+  const chaos = useStore((state) => state.chaos);
+  const distortion = useStore((state) => state.distortion);
+  const textInput = useStore((state) => state.textInput);
+  const baseColor = useStore((state) => state.baseColor);
+  const secondaryColor = useStore((state) => state.secondaryColor);
+  const bloomIntensity = useStore((state) => state.bloomIntensity);
   const materialRef = useRef<THREE.ShaderMaterial>(null);
   const texture = useTopologyTexture(textInput, 0.35 + distortion * 0.25);
   const { size } = useThree();
@@ -2227,7 +2253,10 @@ const pulseFragment = `
 
 function PulseScene() {
   const matRef = useRef<THREE.ShaderMaterial>(null);
-  const { baseColor, secondaryColor, accentColor, bgColor } = useStore();
+  const baseColor = useStore((state) => state.baseColor);
+  const secondaryColor = useStore((state) => state.secondaryColor);
+  const accentColor = useStore((state) => state.accentColor);
+  const bgColor = useStore((state) => state.bgColor);
   const { size } = useThree();
 
   useFrame((state) => {
@@ -2458,7 +2487,13 @@ function RandomGlassBlocksScene() {
   const flowTimeRef = useRef(0);
   const paintTimeRef = useRef(0);
   const mouseMotionRef = useRef(new THREE.Vector2(0, 0));
-  const { textInput, textColor, textFontSize, textLetterSpacing, textFontWeight, speed, chaos } = useStore();
+  const textInput = useStore((state) => state.textInput);
+  const textColor = useStore((state) => state.textColor);
+  const textFontSize = useStore((state) => state.textFontSize);
+  const textLetterSpacing = useStore((state) => state.textLetterSpacing);
+  const textFontWeight = useStore((state) => state.textFontWeight);
+  const speed = useStore((state) => state.speed);
+  const chaos = useStore((state) => state.chaos);
   const displayText = textInput.trim().toUpperCase();
   const textTexture = useCleanTextTexture(displayText, false, textFontSize * 1.25, textLetterSpacing, textFontWeight);
 
@@ -2541,9 +2576,11 @@ function RandomGlassBlocksScene() {
 
 // === ROUTER ===
 function SceneRouter({ sceneOverride }: { sceneOverride?: string }) {
-  const { currentScene } = useStore();
+  const currentScene = useStore((state) => state.currentScene);
   const scene = sceneOverride || currentScene;
-  switch(scene) {
+  const moduleId = getVisualModule(scene)?.id ?? scene;
+  switch(moduleId) {
+    case 'Layered Stage': return null;
     case 'Blue Font': return null;
     case 'Purple': return null;
     case 'Cyber': return <CyberScene />;
@@ -2856,7 +2893,16 @@ const chromeTextFragment = `
 function VisualText({ sceneOverride }: { sceneOverride?: string }) {
   const textRef = useRef<THREE.Mesh>(null);
   const chromeMatRef = useRef<THREE.ShaderMaterial>(null);
-  const { currentScene, textInput, textAnimStyle, textGlow, textSpeed, textReactive, textColor, textFontSize, textLetterSpacing, textFontWeight } = useStore();
+  const currentScene = useStore((state) => state.currentScene);
+  const textInput = useStore((state) => state.textInput);
+  const textAnimStyle = useStore((state) => state.textAnimStyle);
+  const textGlow = useStore((state) => state.textGlow);
+  const textSpeed = useStore((state) => state.textSpeed);
+  const textReactive = useStore((state) => state.textReactive);
+  const textColor = useStore((state) => state.textColor);
+  const textFontSize = useStore((state) => state.textFontSize);
+  const textLetterSpacing = useStore((state) => state.textLetterSpacing);
+  const textFontWeight = useStore((state) => state.textFontWeight);
   const scene = sceneOverride || currentScene;
 
   const displayText = textInput.toUpperCase();
@@ -2976,7 +3022,14 @@ function VisualText({ sceneOverride }: { sceneOverride?: string }) {
 
 // === HIGH-END POST PROCESSING ===
 function PostProcessing({ reduced = false }: { reduced?: boolean }) {
-  const { audioDriveMode, audioFxReactive, autoVjEnabled, bloomIntensity, rgbSplitAmount, distortion, glitchActive, currentScene } = useStore();
+  const audioDriveMode = useStore((state) => state.audioDriveMode);
+  const audioFxReactive = useStore((state) => state.audioFxReactive);
+  const autoVjEnabled = useStore((state) => state.autoVjEnabled);
+  const bloomIntensity = useStore((state) => state.bloomIntensity);
+  const rgbSplitAmount = useStore((state) => state.rgbSplitAmount);
+  const distortion = useStore((state) => state.distortion);
+  const glitchActive = useStore((state) => state.glitchActive);
+  const currentScene = useStore((state) => state.currentScene);
   const [dynamicBloom, setDynamicBloom] = useState(bloomIntensity);
   const [dynamicSplit, setDynamicSplit] = useState(rgbSplitAmount);
   const [dynamicDistortion, setDynamicDistortion] = useState(distortion);
@@ -2984,6 +3037,7 @@ function PostProcessing({ reduced = false }: { reduced?: boolean }) {
   const lastUpdateRef = useRef(0);
   const dynamicRef = useRef({ bloom: bloomIntensity, split: rgbSplitAmount, distortion, glitch: false });
   const renderedRef = useRef({ bloom: bloomIntensity, split: rgbSplitAmount, distortion, glitch: false });
+  const chromaticOffset = useMemo(() => new THREE.Vector2(), []);
 
   useFrame((state) => {
     const now = state.clock.elapsedTime;
@@ -3038,6 +3092,11 @@ function PostProcessing({ reduced = false }: { reduced?: boolean }) {
     dynamicRef.current = next;
   });
 
+  chromaticOffset.set(
+    reduced ? dynamicSplit * 0.45 : dynamicSplit * 0.58,
+    reduced ? dynamicSplit * 0.45 : dynamicSplit * 0.58
+  );
+
   return (
     <EffectComposer multisampling={0}>
       {currentScene !== 'Void' && !reduced && (
@@ -3057,14 +3116,18 @@ function PostProcessing({ reduced = false }: { reduced?: boolean }) {
           ratio={0.85}
         />
       )}
-      <ChromaticAberration offset={new THREE.Vector2(reduced ? dynamicSplit * 0.45 : dynamicSplit * 0.58, reduced ? dynamicSplit * 0.45 : dynamicSplit * 0.58)} />
+      <ChromaticAberration offset={chromaticOffset} />
     </EffectComposer>
   );
 }
 
 function MusicCameraRig() {
   const { camera } = useThree();
-  const { audioDriveMode, currentScene, musicCameraEnabled, speed, chaos } = useStore();
+  const audioDriveMode = useStore((state) => state.audioDriveMode);
+  const currentScene = useStore((state) => state.currentScene);
+  const musicCameraEnabled = useStore((state) => state.musicCameraEnabled);
+  const speed = useStore((state) => state.speed);
+  const chaos = useStore((state) => state.chaos);
   const lookTarget = useMemo(() => new THREE.Vector3(), []);
   const targetPosition = useMemo(() => new THREE.Vector3(0, 0, 5), []);
 
@@ -3112,7 +3175,12 @@ function MusicCameraRig() {
 
 function AudioMorphTone() {
   const { scene } = useThree();
-  const { audioDriveMode, autoVjEnabled, bgColor, baseColor, secondaryColor, currentScene } = useStore();
+  const audioDriveMode = useStore((state) => state.audioDriveMode);
+  const autoVjEnabled = useStore((state) => state.autoVjEnabled);
+  const bgColor = useStore((state) => state.bgColor);
+  const baseColor = useStore((state) => state.baseColor);
+  const secondaryColor = useStore((state) => state.secondaryColor);
+  const currentScene = useStore((state) => state.currentScene);
   const quietColor = useMemo(() => new THREE.Color(), []);
   const pulseColor = useMemo(() => new THREE.Color(), []);
   const targetColor = useMemo(() => new THREE.Color(), []);
@@ -3140,17 +3208,15 @@ function AudioMorphTone() {
 }
 
 function PulseEnergyOverlay({ sceneOverride }: { sceneOverride?: string }) {
-  const {
-    currentScene,
-    textInput,
-    textAnimStyle,
-    textFontSize,
-    textFontWeight,
-    textLetterSpacing,
-    textGlow,
-    textSpeed,
-    textColor,
-  } = useStore();
+  const currentScene = useStore((state) => state.currentScene);
+  const textInput = useStore((state) => state.textInput);
+  const textAnimStyle = useStore((state) => state.textAnimStyle);
+  const textFontSize = useStore((state) => state.textFontSize);
+  const textFontWeight = useStore((state) => state.textFontWeight);
+  const textLetterSpacing = useStore((state) => state.textLetterSpacing);
+  const textGlow = useStore((state) => state.textGlow);
+  const textSpeed = useStore((state) => state.textSpeed);
+  const textColor = useStore((state) => state.textColor);
   const scene = sceneOverride || currentScene;
   if (scene !== 'Pulse') return null;
 
@@ -3227,15 +3293,13 @@ function PulseEnergyOverlay({ sceneOverride }: { sceneOverride?: string }) {
 }
 
 function DarkSpaceTextOverlay({ sceneOverride }: { sceneOverride?: string }) {
-  const {
-    currentScene,
-    textInput,
-    textFontSize,
-    textFontWeight,
-    textLetterSpacing,
-    textGlow,
-    textSpeed,
-  } = useStore();
+  const currentScene = useStore((state) => state.currentScene);
+  const textInput = useStore((state) => state.textInput);
+  const textFontSize = useStore((state) => state.textFontSize);
+  const textFontWeight = useStore((state) => state.textFontWeight);
+  const textLetterSpacing = useStore((state) => state.textLetterSpacing);
+  const textGlow = useStore((state) => state.textGlow);
+  const textSpeed = useStore((state) => state.textSpeed);
   const scene = sceneOverride || currentScene;
   const rootRef = useRef<HTMLDivElement>(null);
   const displayText = textInput.trim().toUpperCase();
@@ -3466,27 +3530,22 @@ function DarkSpaceTextOverlay({ sceneOverride }: { sceneOverride?: string }) {
   );
 }
 
-export function Visualizer({ screenIdOverride }: { screenIdOverride?: string } = {}) {
-  const {
-    activeScreenId,
-    audioDriveMode,
-    autoVjEnabled,
-    bgColor,
-    brightness,
-    contrast,
-    currentScene,
-    outputMode,
-    saturation,
-    screenAudioReactive,
-    screenTransitionAmount,
-    screenTransitionStyle,
-    syncedScreenSignal,
-    visualScreens,
-    language,
-  } = useStore();
+function VisualizerInner({ screenIdOverride }: { screenIdOverride?: string } = {}) {
+  const activeScreenId = useStore((state) => state.activeScreenId);
+  const audioDriveMode = useStore((state) => state.audioDriveMode);
+  const autoVjEnabled = useStore((state) => state.autoVjEnabled);
+  const bgColor = useStore((state) => state.bgColor);
+  const brightness = useStore((state) => state.brightness);
+  const contrast = useStore((state) => state.contrast);
+  const currentScene = useStore((state) => state.currentScene);
+  const outputMode = useStore((state) => state.outputMode);
+  const saturation = useStore((state) => state.saturation);
+  const screenTransitionStyle = useStore((state) => state.screenTransitionStyle);
+  const syncedScreenSignal = useStore((state) => state.syncedScreenSignal);
+  const visualScreens = useStore((state) => state.visualScreens);
+  const language = useStore((state) => state.language);
   const labels = screenText[language];
   const containerRef = useRef<HTMLDivElement>(null);
-  const [viewportKey, setViewportKey] = useState(0);
   const isScreenOutput = Boolean(screenIdOverride);
   const effectiveScreenId = screenIdOverride || activeScreenId;
   const activeScreen = visualScreens.find((screen) => screen.id === effectiveScreenId) || visualScreens[0];
@@ -3494,11 +3553,13 @@ export function Visualizer({ screenIdOverride }: { screenIdOverride?: string } =
   const sceneOverride = isScreenOutput
     ? (outputMode === 'mirror' ? currentScene : activeScreen?.scene)
     : currentScene;
+  const visualModule = getVisualModule(sceneOverride);
+  const effectiveScene = visualModule?.id ?? sceneOverride;
   const displaySignal = syncedScreenSignal;
   const canvasDpr = useMemo<[number, number]>(() => {
     const pixelRatio = typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1;
     return isScreenOutput ? [0.7, Math.min(1, pixelRatio)] : [0.9, Math.min(1.5, Math.max(1, pixelRatio))];
-  }, [isScreenOutput, viewportKey]);
+  }, [isScreenOutput]);
   const deviceAspectClass = activeScreen?.device === 'phone'
     ? 'inset-x-[36%] inset-y-[8%]'
     : activeScreen?.device === 'tablet'
@@ -3506,24 +3567,6 @@ export function Visualizer({ screenIdOverride }: { screenIdOverride?: string } =
       : activeScreen?.device === 'projector'
         ? 'inset-x-[8%] inset-y-[12%]'
         : 'inset-4';
-
-  useEffect(() => {
-    let resizeFrame = 0;
-    const resize = () => {
-      if (resizeFrame) return;
-      resizeFrame = requestAnimationFrame(() => {
-        resizeFrame = 0;
-        setViewportKey((key) => key + 1);
-      });
-    };
-    window.addEventListener('resize', resize);
-    window.addEventListener('orientationchange', resize);
-    return () => {
-      if (resizeFrame) cancelAnimationFrame(resizeFrame);
-      window.removeEventListener('resize', resize);
-      window.removeEventListener('orientationchange', resize);
-    };
-  }, []);
 
   useEffect(() => {
     let frame = 0;
@@ -3538,10 +3581,22 @@ export function Visualizer({ screenIdOverride }: { screenIdOverride?: string } =
         let audioSaturation = 0;
 
         if (autoVjEnabled) {
-          const { bass, treble, energy, beat, spectralFlux, transient, spectralCentroid } = getAudioDriveSnapshot(audioDriveMode);
-          audioContrast = Math.min(0.08, energy * 0.028 + beat * 0.014 + spectralFlux * 0.026);
-          audioBrightness = Math.min(0.035, bass * 0.012 + beat * 0.008 + transient * 0.012);
-          audioSaturation = Math.min(0.16, treble * 0.07 + energy * 0.034 + spectralCentroid * 0.044);
+          const audio = getAudioDriveSnapshot(audioDriveMode);
+          const music = getMusicDriveFrame(audioDriveMode);
+          const sceneModule = getVisualModule(sceneOverride);
+          const moduleAudio = sceneModule?.mapAudioToVisualState(audio, music);
+          const moduleLive = sceneModule?.mapLiveControlsToParams(useStore.getState().liveControls);
+          const energyDrive = moduleAudio?.energy ?? audio.energy;
+          const beatDrive = moduleAudio?.beat ?? audio.beat;
+          const bassDrive = moduleAudio?.bass ?? audio.bass;
+          const trebleDrive = moduleAudio?.treble ?? audio.treble;
+          const transientDrive = moduleAudio?.transient ?? audio.transient;
+          const impact = moduleLive?.impact ?? 1;
+          const punch = moduleLive?.punch ?? 1;
+          const saturationLift = moduleLive ? Math.max(0, moduleLive.saturation - 1) * 0.035 : audio.spectralCentroid * 0.044;
+          audioContrast = Math.min(0.1, energyDrive * 0.032 * impact + beatDrive * 0.014 * punch + audio.spectralFlux * 0.022);
+          audioBrightness = Math.min(0.045, bassDrive * 0.012 * impact + beatDrive * 0.008 * punch + transientDrive * 0.012);
+          audioSaturation = Math.min(0.2, trebleDrive * 0.06 + energyDrive * 0.032 + saturationLift);
         }
 
         const nextFilter = `contrast(${(contrast + audioContrast).toFixed(4)}) brightness(${(brightness + audioBrightness).toFixed(4)}) saturate(${(saturation + audioSaturation).toFixed(4)})`;
@@ -3555,7 +3610,7 @@ export function Visualizer({ screenIdOverride }: { screenIdOverride?: string } =
 
     updateFilter();
     return () => cancelAnimationFrame(frame);
-  }, [audioDriveMode, autoVjEnabled, brightness, contrast, saturation]);
+  }, [audioDriveMode, autoVjEnabled, brightness, contrast, saturation, sceneOverride]);
   
   return (
     <div 
@@ -3563,13 +3618,14 @@ export function Visualizer({ screenIdOverride }: { screenIdOverride?: string } =
       className="absolute inset-0 h-full min-h-0 w-full overflow-hidden"
       style={{ filter: `contrast(${contrast}) brightness(${brightness}) saturate(${saturation})` }}
     >
-      {sceneOverride === 'Blue Font' ? (
+      {effectiveScene === 'Layered Stage' ? (
+        <LayeredStageScene />
+      ) : effectiveScene === 'Blue Font' ? (
         <BlueFontScene />
-      ) : sceneOverride === 'Purple' ? (
+      ) : effectiveScene === 'Purple' ? (
         <PurpleScene />
       ) : (
         <Canvas
-          key={viewportKey}
           className="screen-canvas !absolute !inset-0 !h-full !w-full"
           style={{ width: '100%', height: '100%' }}
           camera={{ position: [0, 0, 5], fov: 60 }}
@@ -3583,14 +3639,14 @@ export function Visualizer({ screenIdOverride }: { screenIdOverride?: string } =
           <color attach="background" args={[bgColor]} />
           <AudioMorphTone />
           <MusicCameraRig />
-          <SceneRouter sceneOverride={sceneOverride} />
-          <AudioMutationOverlay sceneOverride={sceneOverride} />
-          {sceneOverride !== 'Void' && <VisualText sceneOverride={sceneOverride} />}
+          <SceneRouter sceneOverride={effectiveScene} />
+          <AudioMutationOverlay sceneOverride={effectiveScene} />
+          {effectiveScene !== 'Void' && <VisualText sceneOverride={effectiveScene} />}
           <PostProcessing reduced={isScreenOutput} />
         </Canvas>
       )}
-      <DarkSpaceTextOverlay sceneOverride={sceneOverride} />
-      <PulseEnergyOverlay sceneOverride={sceneOverride} />
+      <DarkSpaceTextOverlay sceneOverride={effectiveScene} />
+      <PulseEnergyOverlay sceneOverride={effectiveScene} />
       {isScreenOutput && !activeScreen?.enabled && (
         <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/70 text-[11px] font-bold uppercase tracking-[0.35em] text-white/50">
           {labels.outputDisabled}
@@ -3650,3 +3706,5 @@ export function Visualizer({ screenIdOverride }: { screenIdOverride?: string } =
     </div>
   );
 }
+
+export const Visualizer = React.memo(VisualizerInner);

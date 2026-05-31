@@ -170,13 +170,21 @@ const fragmentShaderSource = `
   }
 `;
 
+const clamp01 = (value: number) => Math.max(0, Math.min(1, value));
+
 const hexToRgb = (hex: string): [number, number, number] => {
   const cleaned = hex.replace('#', '');
-  const r = parseInt(cleaned.substring(0, 2), 16) / 255;
-  const g = parseInt(cleaned.substring(2, 4), 16) / 255;
-  const b = parseInt(cleaned.substring(4, 6), 16) / 255;
+  const r = Number.parseInt(cleaned.substring(0, 2), 16) / 255;
+  const g = Number.parseInt(cleaned.substring(2, 4), 16) / 255;
+  const b = Number.parseInt(cleaned.substring(4, 6), 16) / 255;
   return [Number.isFinite(r) ? r : 1, Number.isFinite(g) ? g : 1, Number.isFinite(b) ? b : 1];
 };
+
+const blendRgb = (a: [number, number, number], b: [number, number, number], amount: number): [number, number, number] => [
+  a[0] + (b[0] - a[0]) * amount,
+  a[1] + (b[1] - a[1]) * amount,
+  a[2] + (b[2] - a[2]) * amount,
+];
 
 const compileShader = (gl: WebGLRenderingContext, source: string, type: number) => {
   const shader = gl.createShader(type);
@@ -197,47 +205,35 @@ export function PurpleScene() {
   const timeRef = useRef(0);
   const phaseRef = useRef({ bass: 0, treble: 0 });
   const [shaderError, setShaderError] = useState<string | null>(null);
-  const {
-    accentColor,
-    audioDriveMode,
-    autoVjEnabled,
-    baseColor,
-    chaos,
-    secondaryColor,
-    speed,
-  } = useStore();
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas) return undefined;
 
-    const gl = canvas.getContext('webgl', { antialias: true, alpha: false });
+    const gl = canvas.getContext('webgl', { antialias: true, alpha: false, powerPreference: 'high-performance' });
     if (!gl) {
       setShaderError('WebGL is not available for the Purple visual.');
-      return;
+      return undefined;
     }
 
     const vertexShader = compileShader(gl, vertexShaderSource, gl.VERTEX_SHADER);
     const fragmentShader = compileShader(gl, fragmentShaderSource, gl.FRAGMENT_SHADER);
     if (!vertexShader || !fragmentShader) {
       setShaderError('Purple shader failed to compile.');
-      return;
+      return undefined;
     }
 
     const program = gl.createProgram();
-    if (!program) return;
+    if (!program) return undefined;
     gl.attachShader(program, vertexShader);
     gl.attachShader(program, fragmentShader);
     gl.linkProgram(program);
     if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
       setShaderError(`Purple shader failed to link: ${gl.getProgramInfoLog(program)}`);
-      return;
+      return undefined;
     }
 
-    const vertices = new Float32Array([
-      -1, -1, 1, -1, -1, 1,
-      -1, 1, 1, -1, 1, 1,
-    ]);
+    const vertices = new Float32Array([-1, -1, 1, -1, -1, 1, -1, 1, 1, -1, 1, 1]);
     const vertexBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, vertexBuffer);
     gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
@@ -247,30 +243,36 @@ export function PurpleScene() {
     gl.vertexAttribPointer(positionLocation, 2, gl.FLOAT, false, 0, 0);
     gl.clearColor(0, 0, 0, 1);
 
-    const resize = () => {
-      const width = Math.max(1, canvas.clientWidth);
-      const height = Math.max(1, canvas.clientHeight);
-      const ratio = Math.min(window.devicePixelRatio || 1, 2);
-      const pixelWidth = Math.floor(width * ratio);
-      const pixelHeight = Math.floor(height * ratio);
-      if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
-        canvas.width = pixelWidth;
-        canvas.height = pixelHeight;
-        gl.viewport(0, 0, pixelWidth, pixelHeight);
-      }
+    const uniformCache = new Map<string, WebGLUniformLocation | null>();
+    const uniform = (name: string) => {
+      if (!uniformCache.has(name)) uniformCache.set(name, gl.getUniformLocation(program, name));
+      return uniformCache.get(name);
     };
-
     const setFloat = (name: string, value: number) => {
-      const location = gl.getUniformLocation(program, name);
+      const location = uniform(name);
       if (location) gl.uniform1f(location, value);
     };
     const setVec2 = (name: string, x: number, y: number) => {
-      const location = gl.getUniformLocation(program, name);
+      const location = uniform(name);
       if (location) gl.uniform2f(location, x, y);
     };
     const setVec3 = (name: string, rgb: [number, number, number]) => {
-      const location = gl.getUniformLocation(program, name);
+      const location = uniform(name);
       if (location) gl.uniform3f(location, rgb[0], rgb[1], rgb[2]);
+    };
+
+    const resize = () => {
+      const rect = canvas.getBoundingClientRect();
+      const isScreenOutput = window.location.pathname.startsWith('/screen/');
+      const dprLimit = isScreenOutput ? 1.75 : 1.35;
+      const dpr = Math.min(dprLimit, window.devicePixelRatio || 1);
+      const width = Math.max(1, Math.floor(rect.width * dpr));
+      const height = Math.max(1, Math.floor(rect.height * dpr));
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width;
+        canvas.height = height;
+        gl.viewport(0, 0, width, height);
+      }
     };
 
     let lastTimestamp = performance.now();
@@ -280,13 +282,27 @@ export function PurpleScene() {
       timeRef.current += delta;
       resize();
 
-      const audio = getAudioDriveSnapshot(audioDriveMode);
-      const live = autoVjEnabled ? 1 : 0.35;
-      const bass = Math.min(1.8, Math.max(audio.bass, audio.subBass) * (0.85 + chaos * 0.9) * live);
-      const mid = Math.min(1.6, Math.max(audio.mid, audio.lowMid) * (0.78 + chaos * 0.54) * live);
-      const treble = Math.min(1.8, Math.max(audio.treble, audio.highMid) * (0.95 + chaos * 0.85) * live);
-      phaseRef.current.bass += delta * (0.6 + bass * 4.2 + audio.beat * 2.4);
-      phaseRef.current.treble += delta * (1.1 + treble * 5.4 + audio.transient * 3.2);
+      const store = useStore.getState();
+      const liveControls = store.liveControls;
+      const audio = getAudioDriveSnapshot(store.audioDriveMode);
+      const live = store.autoVjEnabled ? 1 : 0.35;
+      const energyDrive = 0.82 + liveControls.energyY * 0.88;
+      const rhythmTightness = 0.72 + liveControls.rhythmX * 0.72;
+      const punch = 0.72 + liveControls.rhythmY * 1.12;
+      const bass = Math.min(1.8, Math.max(audio.bass, audio.subBass) * energyDrive * live);
+      const mid = Math.min(1.6, Math.max(audio.mid, audio.lowMid) * (0.78 + liveControls.textureX * 0.42) * live);
+      const treble = Math.min(1.8, Math.max(audio.treble, audio.highMid) * (0.9 + liveControls.textureY * 0.55 + liveControls.atmosphereX * 0.28) * live);
+      phaseRef.current.bass += delta * (0.48 + bass * 4.2 * punch + audio.beat * 2.4 * rhythmTightness);
+      phaseRef.current.treble += delta * (0.9 + treble * 5.0 + audio.transient * 3.0 * punch);
+
+      const coolPrimary = hexToRgb(store.baseColor || '#ffffff');
+      const coolSecondary = hexToRgb(store.secondaryColor || '#0a0a1f');
+      const coolAccent = hexToRgb(store.accentColor || '#00e1ff');
+      const warmMix = clamp01(liveControls.colorX) * 0.24;
+      const colorLift = 0.86 + liveControls.colorY * 0.28;
+      const primary = blendRgb(coolPrimary, [1.0, 0.76, 0.92], warmMix).map((channel) => channel * colorLift) as [number, number, number];
+      const secondary = blendRgb(coolSecondary, [0.14, 0.06, 0.2], warmMix * 0.6);
+      const accent = blendRgb(coolAccent, [0.78, 0.34, 1.0], warmMix);
 
       gl.clear(gl.COLOR_BUFFER_BIT);
       gl.useProgram(program);
@@ -297,19 +313,19 @@ export function PurpleScene() {
       setFloat('u_treble', treble);
       setFloat('u_bass_phase', phaseRef.current.bass);
       setFloat('u_treble_phase', phaseRef.current.treble);
-      setVec3('u_primary_color', hexToRgb(baseColor || '#ffffff'));
-      setVec3('u_secondary_color', hexToRgb(secondaryColor || '#0a0a1f'));
-      setVec3('u_accent_color', hexToRgb(accentColor || '#00e1ff'));
-      setFloat('u_brightness', 1.02 + Math.min(0.55, audio.energy * 0.26 + audio.beat * 0.22));
-      setFloat('u_density', 1.15 + chaos * 1.7);
-      setFloat('u_flow_speed', 0.58 + speed * 0.52);
-      setFloat('u_void_size', 0.82 + (1 - Math.min(1, chaos)) * 0.54);
-      setFloat('u_refraction', 2.2 + chaos * 3.2);
-      setFloat('u_camera_zoom', 0.72 + Math.sin(timeRef.current * 0.13) * 0.035 - bass * 0.045);
-      setFloat('u_tunnel_speed', 0.9 + speed * 0.7);
-      setFloat('u_vortex_wrap', 0.45 + chaos * 1.6 + audio.spectralFlux * 0.28);
-      setFloat('u_sparkle_size', 1.28 + treble * 0.6);
-      setFloat('u_sparkle_brightness', 1.15 + treble * 1.5 + audio.transient * 0.7);
+      setVec3('u_primary_color', primary);
+      setVec3('u_secondary_color', secondary);
+      setVec3('u_accent_color', accent);
+      setFloat('u_brightness', 0.92 + liveControls.colorY * 0.18 + liveControls.atmosphereX * 0.22 + Math.min(0.42, audio.energy * 0.22 + audio.beat * 0.16));
+      setFloat('u_density', 0.92 + liveControls.textureX * 1.35 + liveControls.energyY * 0.42);
+      setFloat('u_flow_speed', 0.5 + liveControls.energyX * 0.82 + store.speed * 0.18);
+      setFloat('u_void_size', 1.26 - liveControls.structureX * 0.52 + (1 - liveControls.energyY) * 0.24);
+      setFloat('u_refraction', 2.0 + liveControls.atmosphereY * 3.6 + liveControls.structureY * 1.1);
+      setFloat('u_camera_zoom', 0.72 + Math.sin(timeRef.current * 0.13) * 0.035 - bass * 0.045 + (liveControls.atmosphereY - 0.5) * 0.08);
+      setFloat('u_tunnel_speed', 0.78 + liveControls.energyX * 0.94 + liveControls.rhythmX * 0.28);
+      setFloat('u_vortex_wrap', 0.32 + liveControls.structureY * 1.55 + liveControls.textureY * 0.45 + audio.spectralFlux * 0.28);
+      setFloat('u_sparkle_size', 0.9 + liveControls.textureX * 0.86 + treble * 0.5);
+      setFloat('u_sparkle_brightness', 0.9 + liveControls.atmosphereX * 1.1 + liveControls.textureY * 0.55 + treble * 1.2 + audio.transient * 0.6);
 
       gl.drawArrays(gl.TRIANGLES, 0, 6);
       frameRef.current = requestAnimationFrame(render);
@@ -325,7 +341,7 @@ export function PurpleScene() {
       gl.deleteShader(fragmentShader);
       gl.deleteProgram(program);
     };
-  }, [accentColor, audioDriveMode, autoVjEnabled, baseColor, chaos, secondaryColor, speed]);
+  }, []);
 
   if (shaderError) {
     return (
@@ -335,11 +351,5 @@ export function PurpleScene() {
     );
   }
 
-  return (
-    <canvas
-      ref={canvasRef}
-      className="absolute inset-0 block h-full w-full bg-black"
-      aria-label="Purple visual template"
-    />
-  );
+  return <canvas ref={canvasRef} className="absolute inset-0 block h-full w-full bg-black" aria-label="Purple visual template" />;
 }

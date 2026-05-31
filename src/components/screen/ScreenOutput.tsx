@@ -1,13 +1,12 @@
 import { ExternalLink, MonitorOff, Route, Wifi, WifiOff } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { useScreenSync } from '@/lib/screenSync';
+import { INTERACTION_PATCH_EVENT } from '@/components/ShowControlBridge';
 import { screenText } from '@/lib/screenText';
 import { fetchScreenState, type ScreenPresentation, type ScreenRoute } from '@/lib/screenRoutes';
 import { useStore } from '@/store/useStore';
 import { Visualizer } from '@/components/visualizer/Visualizer';
 
 export function ScreenOutput({ screenId }: { screenId: string }) {
-  const { connected } = useScreenSync('screen', screenId);
   const [route, setRoute] = useState<ScreenRoute | null>(null);
   const [presentation, setPresentation] = useState<ScreenPresentation>({
     autoRedirect: true,
@@ -18,6 +17,7 @@ export function ScreenOutput({ screenId }: { screenId: string }) {
   const { language, visualScreens } = useStore();
   const labels = screenText[language];
   const screen = visualScreens.find((item) => item.id === screenId);
+  const connected = !routeError;
 
   useEffect(() => {
     const controller = new AbortController();
@@ -42,6 +42,25 @@ export function ScreenOutput({ screenId }: { screenId: string }) {
       controller.abort();
       window.clearTimeout(timer);
     };
+  }, [screenId]);
+
+  useEffect(() => {
+    const handleInteractionPatch = (event: Event) => {
+      const patch = (event as CustomEvent<Record<string, unknown>>).detail;
+      const routes = isRecord(patch.screenRoutes) ? patch.screenRoutes as Record<string, ScreenRoute> : null;
+      if (routes) setRoute(routes[screenId] || null);
+      if (isRecord(patch.screenPresentation)) {
+        const next = patch.screenPresentation;
+        setPresentation((current) => ({
+          autoRedirect: typeof next.autoRedirect === 'boolean' ? next.autoRedirect : current.autoRedirect,
+          showDebug: typeof next.showDebug === 'boolean' ? next.showDebug : current.showDebug,
+          showMenu: typeof next.showMenu === 'boolean' ? next.showMenu : current.showMenu,
+        }));
+      }
+    };
+
+    window.addEventListener(INTERACTION_PATCH_EVENT, handleInteractionPatch);
+    return () => window.removeEventListener(INTERACTION_PATCH_EVENT, handleInteractionPatch);
   }, [screenId]);
 
   useEffect(() => {
@@ -111,4 +130,8 @@ export function ScreenOutput({ screenId }: { screenId: string }) {
       )}
     </div>
   );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }

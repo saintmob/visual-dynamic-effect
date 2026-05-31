@@ -1,10 +1,20 @@
 import { useEffect, useRef } from 'react';
 import { FIREBASE_DATABASE_URL, SHOW_BACKEND_URL, SHOW_CONTROL_TOKEN, SHOW_ID, SHOW_TRANSPORT, SHOW_WS_URL } from '@/lib/runtimeConfig';
-import { setRemoteAudioEnabled, setRemoteAudioSnapshot, type AudioDriveSnapshot } from '@/lib/audioDrive';
+import {
+  setRemoteAudioEnabled,
+  setRemoteAudioSnapshot,
+  setRemoteMusicDriveFrame,
+  type AudioDriveSnapshot,
+  type MusicDriveFrame,
+  type MusicLayerDrive,
+  type MusicTransportState,
+} from '@/lib/audioDrive';
 
 const API_ENDPOINT = `${SHOW_BACKEND_URL}/api/audio-summary`;
 const FALLBACK_POLL_INTERVAL_MS = 500;
 const FALLBACK_STALE_MS = 250;
+const FALLBACK_BACKOFF_MAX_MS = 10_000;
+const WS_RECONNECT_MAX_MS = 15_000;
 
 const wsUrl = SHOW_WS_URL;
 const controlToken = SHOW_CONTROL_TOKEN;
@@ -16,6 +26,10 @@ export function useApiAudioSource(enabled: boolean) {
   const reconnectRef = useRef<number | null>(null);
   const socketRef = useRef<WebSocket | null>(null);
   const lastUpdateAtRef = useRef<number>(0);
+  const nextFallbackAtRef = useRef<number>(0);
+  const fallbackFailureCountRef = useRef<number>(0);
+  const lastFallbackWarnAtRef = useRef<number>(0);
+  const wsFailureCountRef = useRef<number>(0);
   const clientIdRef = useRef(`vj-audio-drive-${createIdFragment()}`);
 
   useEffect(() => {
@@ -42,6 +56,9 @@ export function useApiAudioSource(enabled: boolean) {
 
     const fetchAudioData = async () => {
       const now = performance.now();
+      if (now < nextFallbackAtRef.current) {
+        return;
+      }
       if (now - lastUpdateAtRef.current < FALLBACK_STALE_MS) {
         return;
       }
@@ -52,9 +69,17 @@ export function useApiAudioSource(enabled: boolean) {
         if (!frame) return;
 
         setRemoteAudioSnapshot(frame.snapshot, frame.syncedSignal);
+        if (frame.musicFrame) setRemoteMusicDriveFrame(frame.musicFrame);
         lastUpdateAtRef.current = now;
+        fallbackFailureCountRef.current = 0;
+        nextFallbackAtRef.current = 0;
       } catch (error) {
-        console.warn('Failed to fetch audio data from API:', error);
+        fallbackFailureCountRef.current += 1;
+        nextFallbackAtRef.current = now + Math.min(FALLBACK_BACKOFF_MAX_MS, 500 * 2 ** fallbackFailureCountRef.current);
+        if (now - lastFallbackWarnAtRef.current > FALLBACK_BACKOFF_MAX_MS) {
+          lastFallbackWarnAtRef.current = now;
+          console.warn('Failed to fetch audio data from API:', error);
+        }
       }
     };
 
@@ -66,6 +91,7 @@ export function useApiAudioSource(enabled: boolean) {
       socketRef.current = socket;
 
       socket.addEventListener('open', () => {
+        wsFailureCountRef.current = 0;
         socket.send(JSON.stringify({
           type: 'client.hello',
           clientId: clientIdRef.current,
@@ -84,6 +110,7 @@ export function useApiAudioSource(enabled: boolean) {
         if (!frame) return;
 
         setRemoteAudioSnapshot(frame.snapshot, frame.syncedSignal);
+        if (frame.musicFrame) setRemoteMusicDriveFrame(frame.musicFrame);
         lastUpdateAtRef.current = performance.now();
       });
 
@@ -92,11 +119,13 @@ export function useApiAudioSource(enabled: boolean) {
         if (reconnectRef.current) {
           clearTimeout(reconnectRef.current);
         }
+        wsFailureCountRef.current += 1;
+        const reconnectDelay = Math.min(WS_RECONNECT_MAX_MS, 1200 * 2 ** Math.min(4, wsFailureCountRef.current - 1));
         reconnectRef.current = window.setTimeout(() => {
           if (!disposed) {
             connectAudioStream();
           }
-        }, 1200);
+        }, reconnectDelay);
       });
 
       socket.addEventListener('error', () => {
@@ -203,7 +232,7 @@ function parseWebSocketPayload(data: unknown): unknown | null {
   return data;
 }
 
-function parseMixerAudioFrame(raw: unknown): { snapshot: Partial<AudioDriveSnapshot>; syncedSignal: number } | null {
+function parseMixerAudioFrame(raw: unknown): { snapshot: Partial<AudioDriveSnapshot>; syncedSignal: number; musicFrame?: Partial<MusicDriveFrame> } | null {
   const source = findAudioFrameSource(raw);
   if (!source) return null;
 
@@ -214,23 +243,28 @@ function parseMixerAudioFrame(raw: unknown): { snapshot: Partial<AudioDriveSnaps
     const peak = normalizeValue(source.peak);
     const beatValue = typeof source.beat === 'number' ? normalizeValue(source.beat) : source.speaking ? 1 : 0;
 
+    const snapshot = {
+      volume: level,
+      subBass: averageBands(bands, 0, 0),
+      bass: averageBands(bands, 1, 2),
+      lowMid: averageBands(bands, 3, 5),
+      mid: averageBands(bands, 6, 8),
+      highMid: averageBands(bands, 9, 11),
+      treble: averageBands(bands, 12, 15),
+      energy: rms,
+      beat: normalizeValue(beatValue),
+      spectralCentroid: averageBands(bands, 0, 15),
+      spectralFlux: peak,
+      transient: Math.max(0, peak - rms),
+      dynamicRange: Math.min(1, peak / (rms || 0.01)),
+    };
+
     return {
       snapshot: {
-        volume: level,
-        subBass: averageBands(bands, 0, 0),
-        bass: averageBands(bands, 1, 2),
-        lowMid: averageBands(bands, 3, 5),
-        mid: averageBands(bands, 6, 8),
-        highMid: averageBands(bands, 9, 11),
-        treble: averageBands(bands, 12, 15),
-        energy: rms,
-        beat: normalizeValue(beatValue),
-        spectralCentroid: averageBands(bands, 0, 15),
-        spectralFlux: peak,
-        transient: Math.max(0, peak - rms),
-        dynamicRange: Math.min(1, peak / (rms || 0.01)),
+        ...snapshot,
       },
       syncedSignal: level,
+      musicFrame: buildMusicDriveFrame(source, bands, snapshot),
     };
   }
 
@@ -254,6 +288,97 @@ function parseMixerAudioFrame(raw: unknown): { snapshot: Partial<AudioDriveSnaps
     snapshot,
     syncedSignal: normalizeValue(source.syncedSignal ?? source.syncedScreenSignal ?? source.signal ?? source.syncSignal ?? 0),
   };
+}
+
+function buildMusicDriveFrame(
+  source: Record<string, unknown>,
+  frequencyBands: number[],
+  snapshot: AudioDriveSnapshot,
+): Partial<MusicDriveFrame> {
+  const slotLevels = extractNumberList(source.slotLevels);
+  const slotActivity = extractNumberList(source.slotActivity);
+  const slotCategories = extractStringList(source.slotCategories ?? source.categories);
+  const slotIds = extractStringList(source.slotIds);
+  const slotNames = extractStringList(source.slotNames);
+  const layers = deriveMusicLayers(snapshot, slotLevels, slotActivity, slotCategories, normalizeValue(source.styleEnergy));
+
+  return {
+    level: snapshot.volume,
+    rms: snapshot.energy,
+    peak: snapshot.spectralFlux,
+    beat: snapshot.beat,
+    activeStep: readBoundedNumber(source.activeStep, 0, 63, 0),
+    stepProgress: normalizeValue(source.stepProgress),
+    bpm: readBoundedNumber(source.bpm, 20, 260, 120),
+    styleEnergy: normalizeValue(source.styleEnergy, snapshot.energy),
+    styleId: typeof source.styleId === 'string' ? source.styleId : '',
+    activePreset: typeof source.activePreset === 'string' ? source.activePreset : '',
+    transport: readTransport(source.transport),
+    masterLevel: normalizeValue(source.masterLevel, snapshot.volume),
+    slotLevels,
+    slotActivity,
+    slotIds,
+    slotNames,
+    slotCategories,
+    frequencyBands,
+    layers,
+  };
+}
+
+function deriveMusicLayers(
+  snapshot: AudioDriveSnapshot,
+  slotLevels: number[],
+  slotActivity: number[],
+  slotCategories: string[],
+  styleEnergy: number,
+): MusicLayerDrive {
+  const knownLayout = ['beat', 'effect', 'bass', 'theme', 'theme', 'melody', 'experimental'];
+  const categories = slotCategories.length ? slotCategories : knownLayout;
+  const categoryDrive = (targets: string[], fallbackIndexes: number[]) => {
+    let total = 0;
+    let count = 0;
+    categories.forEach((category, index) => {
+      if (!targets.includes(category)) return;
+      total += Math.max(slotLevels[index] ?? 0, slotActivity[index] ?? 0);
+      count += 1;
+    });
+    if (count > 0) return normalizeValue(total / count);
+    return averageList(fallbackIndexes.map((index) => Math.max(slotLevels[index] ?? 0, slotActivity[index] ?? 0)));
+  };
+  const transient = Math.max(snapshot.beat, snapshot.transient);
+
+  return {
+    drums: normalizeValue(Math.max(transient, categoryDrive(['beat'], [0]), snapshot.spectralFlux * 0.72)),
+    bassline: normalizeValue(Math.max(snapshot.subBass, snapshot.bass, categoryDrive(['bass'], [2]))),
+    melody: normalizeValue(Math.max(snapshot.mid, snapshot.highMid, categoryDrive(['melody'], [5]))),
+    theme: normalizeValue(Math.max(snapshot.energy, styleEnergy, categoryDrive(['theme'], [3, 4]) * 0.95)),
+    fx: normalizeValue(Math.max(snapshot.treble, snapshot.spectralFlux, categoryDrive(['effect'], [1]))),
+    experimental: normalizeValue(Math.max(snapshot.dynamicRange * 0.45, snapshot.spectralCentroid, categoryDrive(['experimental', 'custom'], [6]))),
+  };
+}
+
+function readTransport(value: unknown): MusicTransportState {
+  return value === 'playing' || value === 'paused' || value === 'stopped' ? value : 'playing';
+}
+
+function readBoundedNumber(value: unknown, min: number, max: number, fallback: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
+  return Math.max(min, Math.min(max, value));
+}
+
+function extractNumberList(value: unknown): number[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((entry) => normalizeValue(entry));
+}
+
+function extractStringList(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.map((entry) => typeof entry === 'string' ? entry : '').filter(Boolean);
+}
+
+function averageList(values: number[]): number {
+  if (!values.length) return 0;
+  return normalizeValue(values.reduce((sum, value) => sum + value, 0) / values.length);
 }
 
 function findAudioFrameSource(value: unknown, depth = 0): Record<string, unknown> | null {

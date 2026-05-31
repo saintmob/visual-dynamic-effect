@@ -29,6 +29,8 @@ type ClientOptions = {
   role: string;
   capabilities?: string[];
   onCommand?: (command: ControlCommand) => void;
+  onSnapshot?: (state: unknown) => void;
+  onStatePatch?: (module: ModuleName, patch: Record<string, unknown>) => void;
   onStatus?: (status: 'connecting' | 'connected' | 'offline') => void;
   onError?: (message: string) => void;
 };
@@ -39,6 +41,7 @@ const controlToken = SHOW_CONTROL_TOKEN;
 const databaseUrl = FIREBASE_DATABASE_URL;
 const showId = SHOW_ID;
 const transport = SHOW_TRANSPORT;
+const WS_RECONNECT_MAX_MS = 15_000;
 
 export function createShowControlClient(options: ClientOptions) {
   if (!controlToken.trim()) {
@@ -75,6 +78,14 @@ function shouldUseFirebase() {
   return Boolean(databaseUrl);
 }
 
+function isModuleName(value: unknown): value is ModuleName {
+  return value === 'audio' || value === 'visual' || value === 'interaction';
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
 function isUsableWebSocketUrl() {
   if (!wsUrl) return false;
   try {
@@ -97,6 +108,7 @@ function createWebSocketClient(options: ClientOptions) {
   let closed = false;
   let lastPatch = '';
   let pendingPatch: Record<string, unknown> | null = null;
+  let reconnectFailures = 0;
 
   const send = (message: Record<string, unknown>) => {
     if (socket?.readyState === WebSocket.OPEN) {
@@ -110,6 +122,7 @@ function createWebSocketClient(options: ClientOptions) {
     socket = new WebSocket(controlToken ? `${wsUrl}${wsUrl.includes('?') ? '&' : '?'}token=${encodeURIComponent(controlToken)}` : wsUrl);
 
     socket.addEventListener('open', () => {
+      reconnectFailures = 0;
       options.onStatus?.('connected');
       send({
         type: 'client.hello',
@@ -131,6 +144,10 @@ function createWebSocketClient(options: ClientOptions) {
       const message = JSON.parse(event.data) as ServerMessage;
       if (message.type === 'control.command') {
         options.onCommand?.(message as ControlCommand);
+      } else if (message.type === 'state.snapshot') {
+        options.onSnapshot?.(message.state);
+      } else if (message.type === 'state.patch' && isModuleName(message.module) && isRecord(message.patch)) {
+        options.onStatePatch?.(message.module, message.patch);
       } else if (message.type === 'error') {
         options.onError?.(String(message.error));
       }
@@ -141,7 +158,9 @@ function createWebSocketClient(options: ClientOptions) {
       options.onStatus?.('offline');
       if (heartbeatTimer) window.clearInterval(heartbeatTimer);
       heartbeatTimer = null;
-      reconnectTimer = window.setTimeout(connect, 1200);
+      reconnectFailures += 1;
+      const reconnectDelay = Math.min(WS_RECONNECT_MAX_MS, 1200 * 2 ** Math.min(4, reconnectFailures - 1));
+      reconnectTimer = window.setTimeout(connect, reconnectDelay);
     });
 
     socket.addEventListener('error', () => {
@@ -192,12 +211,23 @@ function createFirebaseClient(options: ClientOptions) {
     try {
       await firebasePut(`${rootPath}/clients/${safePath(options.clientId)}`, makeClientInfo(options));
       streams.push(openStream(`${rootPath}/commands`, () => void loadCommands()));
+      streams.push(openStream(`${rootPath}/state/modules/${safePath(options.module)}`, () => void loadModuleState()));
       options.onStatus?.('connected');
+      await loadModuleState();
       if (pendingPatch) await publishFirebasePatch(pendingPatch);
     } catch (error) {
       options.onStatus?.('offline');
       options.onError?.(error instanceof Error ? error.message : String(error));
     }
+  };
+
+  const loadModuleState = async () => {
+    if (closed) return;
+    const patch = await firebaseGet<Record<string, unknown>>(`${rootPath}/state/modules/${safePath(options.module)}`).catch((error) => {
+      options.onError?.(error instanceof Error ? error.message : String(error));
+      return null;
+    });
+    if (patch) options.onStatePatch?.(options.module, patch);
   };
 
   const loadCommands = async () => {

@@ -22,7 +22,7 @@ const TextSlider = ({ label, value, onChange, min = 0, max = 2, step = 0.01 }: a
 );
 
 export function TextPanel() {
-  const { language, textInput, textAnimStyle, textGlow, textSpeed, textReactive, textColor, textFontSize, textFontWeight, textLetterSpacing, setTextEngine, applyPreset } = useStore();
+  const { language, textInput, textAnimStyle, textGlow, textSpeed, textReactive, textColor, textFontSize, textFontWeight, textLetterSpacing, setTextEngine } = useStore();
   const i18n = t[language] as (typeof t)[typeof language] & {
     FONT_SIZE?: string;
     FONT_WEIGHT?: string;
@@ -46,19 +46,6 @@ export function TextPanel() {
 
   const handleApply = () => {
     setTextEngine('textInput', localText);
-    const lower = localText.toLowerCase();
-    
-    // Auto sync with visuals occasionally
-    if (lower.includes('cyber') || lower.includes('future') || lower.includes('glitch')) {
-      applyPreset('Cyberpunk');
-    } else if (lower.includes('dream') || lower.includes('ocean') || lower.includes('water')) {
-      applyPreset('Liquid Dream');
-    } else if (lower.includes('chaos') || lower.includes('rage')) {
-      applyPreset('Neon Pulse');
-      setTextEngine('textAnimStyle', 'Glitch');
-    } else if (lower.includes('space') || lower.includes('void')) {
-      applyPreset('Dark Space');
-    }
   };
 
   const handleReset = () => {

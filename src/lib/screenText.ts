@@ -29,6 +29,8 @@ export const screenText = {
       cut: 'Cut',
     },
     scenes: {
+      'Layered Stage': 'Layered Stage',
+      Purple: 'Purple',
       Dumbar: 'Grey Glass',
       Topology: 'Sonic Topology',
       Liquid: 'Liquid',
@@ -37,7 +39,6 @@ export const screenText = {
       Cyber: 'Cyber',
       Pulse: 'Neon Pulse',
       Void: 'Dark Space',
-      Purple: 'Purple',
     },
   },
   ZH: {
@@ -68,6 +69,8 @@ export const screenText = {
       cut: '切换',
     },
     scenes: {
+      'Layered Stage': '分层舞台',
+      Purple: 'Purple',
       Dumbar: '灰玻璃',
       Topology: '声波拓扑',
       Liquid: '流体',
@@ -76,7 +79,6 @@ export const screenText = {
       Cyber: '赛博',
       Pulse: '霓虹脉冲',
       Void: '暗空间',
-      Purple: 'Purple',
     },
   },
 };

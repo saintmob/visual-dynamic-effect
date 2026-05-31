@@ -1,17 +1,9 @@
 import { useStore } from '@/store/useStore';
 import { LayoutGrid } from 'lucide-react';
 import { t } from '@/lib/i18n';
+import { visualModules } from '@/visuals/registry';
 
-const scenesConfig = [
-  { id: 'Void' },
-  { id: 'Liquid' },
-  { id: 'Chromaflux' },
-  { id: 'Blue Font' },
-  { id: 'Cyber' },
-  { id: 'Topology' },
-  { id: 'Pulse' },
-  { id: 'Purple' },
-];
+const scenesConfig = visualModules.map((module) => ({ id: module.id }));
 
 export function ScenePanel() {
   const { currentScene, setCurrentScene, language } = useStore();

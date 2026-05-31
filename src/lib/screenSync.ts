@@ -49,8 +49,19 @@ const selectSyncState = (
     musicCameraAmount: state.musicCameraAmount,
     transitionEnergy: state.transitionEnergy,
     audioDriveMode: state.audioDriveMode,
+    liveControls: state.liveControls,
     audioSnapshot,
   };
+};
+
+const selectSignalState = () => {
+  const state = useStore.getState();
+  const audioSnapshot = getAudioDriveSnapshot(state.audioDriveMode);
+  const syncedScreenSignal = state.screenAudioReactive
+    ? Math.min(1, state.screenTransitionAmount * (0.45 + audioSnapshot.energy * 0.55 + audioSnapshot.beat * 0.45 + audioSnapshot.spectralFlux * 0.35 + audioSnapshot.transient * 0.25))
+    : state.screenTransitionAmount;
+
+  return { audioSnapshot, syncedScreenSignal };
 };
 
 const getSyncUrl = () => {
@@ -58,7 +69,16 @@ const getSyncUrl = () => {
   return `${protocol}//${window.location.host}/sync`;
 };
 
-const isLocalRuntime = () => ['localhost', '127.0.0.1', '0.0.0.0'].includes(window.location.hostname);
+const isLanRuntime = (hostname: string) =>
+  hostname.endsWith('.local') ||
+  /^10\./.test(hostname) ||
+  /^192\.168\./.test(hostname) ||
+  /^172\.(1[6-9]|2\d|3[0-1])\./.test(hostname);
+
+const isLocalRuntime = () => {
+  const hostname = window.location.hostname;
+  return ['localhost', '127.0.0.1', '0.0.0.0'].includes(hostname) || isLanRuntime(hostname);
+};
 
 export function useScreenSync(role: SyncRole, screenId?: string) {
   const [connected, setConnected] = useState(false);
@@ -89,16 +109,10 @@ export function useScreenSync(role: SyncRole, screenId?: string) {
     };
 
     const updateSignal = () => {
-      const state = useStore.getState();
-      const audio = getAudioDriveSnapshot(state.audioDriveMode);
-      const signal = state.screenAudioReactive
-        ? Math.min(1, state.screenTransitionAmount * (0.45 + audio.energy * 0.55 + audio.beat * 0.45 + audio.spectralFlux * 0.35 + audio.transient * 0.25))
-        : state.screenTransitionAmount;
-
       const now = performance.now();
       if (now - lastSyncAt >= SYNC_INTERVAL_MS) {
         lastSyncAt = now;
-        send({ type: 'controller-state', payload: selectSyncState(audio, signal) });
+        send({ type: 'controller-signal', payload: selectSignalState() });
       }
       signalFrame = window.requestAnimationFrame(updateSignal);
     };
@@ -131,6 +145,15 @@ export function useScreenSync(role: SyncRole, screenId?: string) {
               setRemoteAudioSnapshot(message.payload.audioSnapshot, message.payload.syncedScreenSignal);
             }
             useStore.getState().applyRemoteSyncState(message.payload);
+          }
+
+          if (role === 'screen' && message.type === 'screen-signal') {
+            if (message.payload?.audioSnapshot) {
+              setRemoteAudioSnapshot(message.payload.audioSnapshot, message.payload.syncedScreenSignal);
+            }
+            if (typeof message.payload?.syncedScreenSignal === 'number') {
+              useStore.getState().setSyncedScreenSignal(message.payload.syncedScreenSignal);
+            }
           }
         } catch {
           // Ignore malformed sync messages from older tabs.
