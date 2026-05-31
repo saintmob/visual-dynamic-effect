@@ -7,6 +7,7 @@ import { getVisualModule } from '@/visuals/registry';
 import { BlueFontScene } from './BlueFontScene';
 import { LayeredStageScene } from './LayeredStageScene';
 import { PurpleScene } from './PurpleScene';
+import { VideoFlowScene } from './VideoFlowScene';
 import { getReactiveAudio } from './reactiveAudio';
 import { useTextTexture, useCleanTextTexture } from './text/textTextures';
 import { VisualText } from './text/VisualText';
@@ -2524,7 +2525,9 @@ function VisualizerInner({ screenIdOverride }: { screenIdOverride?: string } = {
       className="absolute inset-0 h-full min-h-0 w-full overflow-hidden"
       style={{ filter: `contrast(${contrast}) brightness(${brightness}) saturate(${saturation})` }}
     >
-      {effectiveScene === 'Layered Stage' ? (
+      {effectiveScene === 'Video Flow' ? (
+        <VideoFlowScene />
+      ) : effectiveScene === 'Layered Stage' ? (
         <LayeredStageScene />
       ) : effectiveScene === 'Blue Font' ? (
         <BlueFontScene />

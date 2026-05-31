@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "node server.mjs",
-    "build": "vite build",
-    "start": "NODE_ENV=production node server.mjs",
+    "build": "vite build --configLoader runner",
+    "start": "node -e \"process.env.NODE_ENV='production'; import('./server.mjs')\"",
     "live": "npm run build && npm run start",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",

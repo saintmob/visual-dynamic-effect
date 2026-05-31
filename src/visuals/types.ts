@@ -2,6 +2,7 @@ import type { AudioDriveSnapshot, MusicDriveFrame } from '@/lib/audioDrive';
 
 export type VisualSceneId =
   | 'Layered Stage'
+  | 'Video Flow'
   | 'Purple'
   | 'Blue Font'
   | 'Pulse'
