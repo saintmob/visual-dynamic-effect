@@ -210,7 +210,7 @@ async function fetchShowStateSnapshot(signal?: AbortSignal) {
 async function fetchBackendSnapshot(signal?: AbortSignal) {
   const headers: Record<string, string> = {};
   if (SHOW_CONTROL_TOKEN) headers['x-control-token'] = SHOW_CONTROL_TOKEN;
-  const response = await fetch(`${SHOW_BACKEND_URL}/api/state`, { headers, signal });
+  const response = await fetch(withRoom(`${SHOW_BACKEND_URL}/api/state`), { headers, signal });
   if (!response.ok) throw new Error(`Show API state failed: ${response.status}`);
   return response.json();
 }
@@ -302,6 +302,12 @@ function applyRemoteVisualSnapshot(visual: Record<string, unknown>) {
 
 function safeFirebasePath(value: string) {
   return value.replace(/[.#$/[\]]/g, '-');
+}
+
+function withRoom(url: string) {
+  const next = new URL(url);
+  if (SHOW_ID) next.searchParams.set('room', SHOW_ID);
+  return next.toString();
 }
 
 function applyVisualCommand(command: ControlCommand) {
