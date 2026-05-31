@@ -48,7 +48,6 @@ export async function fetchScreenState(signal?: AbortSignal): Promise<{
   routes: Record<string, ScreenRoute>;
   presentation: ScreenPresentation;
 }> {
-  if (!controlToken.trim()) throw new Error('Control token is required');
   const state = await fetchAuthoritativeState(signal);
   return normalizeScreenState(state);
 }

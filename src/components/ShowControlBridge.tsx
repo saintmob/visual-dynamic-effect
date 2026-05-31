@@ -167,7 +167,6 @@ export function ShowControlBridge({ showStatus = true, publishState = true, role
 }
 
 async function hydrateVisualState(signal?: AbortSignal) {
-  if (!SHOW_CONTROL_TOKEN.trim()) return;
   try {
     const snapshot = await fetchShowStateSnapshot(signal);
     applyRemoteSnapshot(snapshot);

@@ -35,7 +35,7 @@ export function useApiAudioSource(enabled: boolean) {
   useEffect(() => {
     let disposed = false;
 
-    if (!enabled || !controlToken.trim()) {
+    if (!enabled) {
       disposed = true;
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
@@ -87,7 +87,7 @@ export function useApiAudioSource(enabled: boolean) {
       if (disposed) return;
       if (!isUsableWebSocketUrl(wsUrl)) return;
 
-      const socket = new WebSocket(withQuery(wsUrl, { room: showId, token: controlToken }));
+      const socket = new WebSocket(withQuery(wsUrl, { room: showId, token: controlToken || undefined }));
       socketRef.current = socket;
 
       socket.addEventListener('open', () => {
@@ -97,7 +97,6 @@ export function useApiAudioSource(enabled: boolean) {
           clientId: clientIdRef.current,
           module: 'visual',
           role: 'audio-drive',
-          token: controlToken,
           capabilities: ['mixer.audioFrame', 'audio.drive'],
         }));
       });
@@ -158,7 +157,9 @@ export function useApiAudioSource(enabled: boolean) {
 }
 
 async function fetchBackendAudioSummary() {
-  const response = await fetch(API_ENDPOINT, { headers: { 'x-control-token': controlToken } });
+  const headers: Record<string, string> = {};
+  if (controlToken) headers['x-control-token'] = controlToken;
+  const response = await fetch(API_ENDPOINT, { headers });
   if (!response.ok) throw new Error(`API responded with ${response.status}`);
   const contentType = response.headers.get('content-type') || '';
   if (!contentType.includes('application/json')) throw new Error(`API responded with ${contentType || 'non-json content'}`);

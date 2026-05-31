@@ -44,11 +44,6 @@ const transport = SHOW_TRANSPORT;
 const WS_RECONNECT_MAX_MS = 15_000;
 
 export function createShowControlClient(options: ClientOptions) {
-  if (!controlToken.trim()) {
-    options.onStatus?.('offline');
-    options.onError?.('Control token is required before show control can connect');
-    return createDisabledClient();
-  }
   if (!isUsableWebSocketUrl() && (transport === 'websocket' || transport === 'cloudflare') && databaseUrl) {
     options.onError?.(`WebSocket URL ${wsUrl || '(empty)'} is not usable from this page; falling back to Firebase`);
     return createFirebaseClient(options);
@@ -132,7 +127,7 @@ function createWebSocketClient(options: ClientOptions) {
         capabilities: options.capabilities || [],
       });
       if (pendingPatch) {
-        send({ type: 'module.statePatch', module: options.module, source: options.clientId, patch: pendingPatch });
+        if (controlToken.trim()) send({ type: 'module.statePatch', module: options.module, source: options.clientId, patch: pendingPatch });
       }
       if (heartbeatTimer) window.clearInterval(heartbeatTimer);
       heartbeatTimer = window.setInterval(() => {
@@ -172,6 +167,7 @@ function createWebSocketClient(options: ClientOptions) {
 
   return {
     publishState(patch: Record<string, unknown>) {
+      if (!controlToken.trim()) return;
       const encoded = JSON.stringify(patch);
       if (encoded === lastPatch) return;
       lastPatch = encoded;
@@ -179,6 +175,7 @@ function createWebSocketClient(options: ClientOptions) {
       send({ type: 'module.statePatch', module: options.module, source: options.clientId, patch });
     },
     async postState(patch: Record<string, unknown>) {
+      if (!controlToken.trim()) throw new Error('Control token is required');
       const headers: Record<string, string> = { 'content-type': 'application/json' };
       if (controlToken) headers['x-control-token'] = controlToken;
       await fetch(withQuery(`${backendUrl}/api/modules/${options.module}/state`, { room: showId }), {
