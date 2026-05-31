@@ -29,6 +29,8 @@ type ClientOptions = {
   role: string;
   capabilities?: string[];
   onCommand?: (command: ControlCommand) => void;
+  onSnapshot?: (state: unknown) => void;
+  onStatePatch?: (module: ModuleName, patch: Record<string, unknown>) => void;
   onStatus?: (status: 'connecting' | 'connected' | 'offline') => void;
   onError?: (message: string) => void;
 };
@@ -74,6 +76,14 @@ function shouldUseFirebase() {
   if (transport === 'websocket' || transport === 'cloudflare') return !isUsableWebSocketUrl() && Boolean(databaseUrl);
   if (isUsableWebSocketUrl()) return false;
   return Boolean(databaseUrl);
+}
+
+function isModuleName(value: unknown): value is ModuleName {
+  return value === 'audio' || value === 'visual' || value === 'interaction';
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
 function isUsableWebSocketUrl() {
@@ -134,6 +144,10 @@ function createWebSocketClient(options: ClientOptions) {
       const message = JSON.parse(event.data) as ServerMessage;
       if (message.type === 'control.command') {
         options.onCommand?.(message as ControlCommand);
+      } else if (message.type === 'state.snapshot') {
+        options.onSnapshot?.(message.state);
+      } else if (message.type === 'state.patch' && isModuleName(message.module) && isRecord(message.patch)) {
+        options.onStatePatch?.(message.module, message.patch);
       } else if (message.type === 'error') {
         options.onError?.(String(message.error));
       }
@@ -197,12 +211,23 @@ function createFirebaseClient(options: ClientOptions) {
     try {
       await firebasePut(`${rootPath}/clients/${safePath(options.clientId)}`, makeClientInfo(options));
       streams.push(openStream(`${rootPath}/commands`, () => void loadCommands()));
+      streams.push(openStream(`${rootPath}/state/modules/${safePath(options.module)}`, () => void loadModuleState()));
       options.onStatus?.('connected');
+      await loadModuleState();
       if (pendingPatch) await publishFirebasePatch(pendingPatch);
     } catch (error) {
       options.onStatus?.('offline');
       options.onError?.(error instanceof Error ? error.message : String(error));
     }
+  };
+
+  const loadModuleState = async () => {
+    if (closed) return;
+    const patch = await firebaseGet<Record<string, unknown>>(`${rootPath}/state/modules/${safePath(options.module)}`).catch((error) => {
+      options.onError?.(error instanceof Error ? error.message : String(error));
+      return null;
+    });
+    if (patch) options.onStatePatch?.(options.module, patch);
   };
 
   const loadCommands = async () => {

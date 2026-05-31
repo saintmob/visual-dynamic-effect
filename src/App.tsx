@@ -40,7 +40,7 @@ function ScreenApp({ screenId }: { screenId: string }) {
 
   return (
     <>
-      <ShowControlBridge showStatus={false} />
+      <ShowControlBridge showStatus={false} publishState={false} role="screen" />
       <ScreenOutput screenId={screenId} />
     </>
   );

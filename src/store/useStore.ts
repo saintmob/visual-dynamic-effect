@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import type { AudioDriveMode } from '../lib/audioDrive';
 import { SHOW_SCREEN_IDS } from '../lib/screenRoutes';
-import { getPresetLook } from '../visuals/registry';
+import { getPresetLook, getVisualModule } from '../visuals/registry';
 
 export type VisualInputSource = 'mic' | 'music' | 'api';
 export type OutputMode = 'mirror' | 'solo' | 'split';
@@ -163,6 +163,8 @@ interface VisualizerState {
   applyRemoteSyncState: (state: Partial<VisualizerState>) => void;
   saveVisualMemory: () => void;
   applyVisualMemory: (id: string) => void;
+  deleteVisualMemory: (id: string) => void;
+  resetCurrentLook: () => void;
 }
 
 const createMemorySnapshot = (state: VisualizerState, name: string): VisualMemory => ({
@@ -479,6 +481,23 @@ export const useStore = create<VisualizerState>((set) => ({
   applyVisualMemory: (id) => set((state) => {
     const memory = state.visualMemories.find((item) => item.id === id);
     return memory ? applyMemoryState(memory) : {};
+  }),
+  deleteVisualMemory: (id) => set((state) => {
+    const visualMemories = state.visualMemories.filter((item) => item.id !== id);
+    persistMemories(visualMemories);
+    return { visualMemories };
+  }),
+  resetCurrentLook: () => set((state) => {
+    const module = getVisualModule(state.currentScene);
+    if (!module) return {};
+    return {
+      ...module.defaultLook,
+      liveControls: {
+        ...defaultLiveControls,
+        selectedLookId: module.presetId,
+        selectedSceneId: module.defaultLook.currentScene,
+      },
+    };
   }),
   applyPreset: (presetId) => {
     const look = getPresetLook(presetId);
