@@ -112,6 +112,7 @@ export function ShowControlBridge({ showStatus = true, publishState = true, role
     audioDriveMode: store.audioDriveMode,
     inputSource: store.visualInputSource,
     liveControls: store.liveControls,
+    visualScreens: store.visualScreens,
     fullscreen: store.isFullscreen,
     visualMemories: store.visualMemories.map((memory) => ({
       id: memory.id,
@@ -145,6 +146,7 @@ export function ShowControlBridge({ showStatus = true, publishState = true, role
     store.audioDriveMode,
     store.visualInputSource,
     store.liveControls,
+    store.visualScreens,
     store.isFullscreen,
     store.visualMemories,
   ]);
@@ -292,6 +294,7 @@ function applyRemoteVisualSnapshot(visual: Record<string, unknown>) {
   if (typeof text.fontWeight === 'number') patch.textFontWeight = text.fontWeight;
   if (typeof text.letterSpacing === 'number') patch.textLetterSpacing = text.letterSpacing;
   if (isRecord(visual.liveControls)) patch.liveControls = visual.liveControls;
+  if (Array.isArray(visual.visualScreens)) patch.visualScreens = visual.visualScreens;
 
   state.applyRemoteSyncState(patch as Parameters<typeof state.applyRemoteSyncState>[0]);
   if (typeof visual.inputSource === 'string' && ['mic', 'music', 'api'].includes(visual.inputSource)) {
