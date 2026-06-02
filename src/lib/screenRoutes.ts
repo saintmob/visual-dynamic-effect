@@ -1,6 +1,6 @@
 import { FIREBASE_DATABASE_URL, SHOW_BACKEND_URL, SHOW_CONTROL_TOKEN, SHOW_ID, SHOW_TRANSPORT, SHOW_WS_URL } from '@/lib/runtimeConfig';
 
-export type ScreenOwner = 'vj' | 'baofa' | 'off' | 'diagnostic';
+export type ScreenOwner = 'vj' | 'baofa' | 'off' | 'diagnostic' | 'external';
 
 export type ScreenRoute = {
   screenId: string;
@@ -34,6 +34,15 @@ export function getBaofaScreenBaseUrl() {
 }
 
 export const BAOFA_SCREEN_BASE_URL = getBaofaScreenBaseUrl();
+
+export function getScreenGatewayUrl(screenId: string) {
+  const url = new URL(SHOW_BACKEND_URL || window.location.origin);
+  url.pathname = `/screen/${encodeURIComponent(screenId)}`;
+  url.search = '';
+  if (showId && showId !== 'show-main') url.searchParams.set('room', showId);
+  url.hash = '';
+  return url.toString().replace(/\/$/, '');
+}
 
 export const SHOW_SCREEN_IDS = [
   'A1',

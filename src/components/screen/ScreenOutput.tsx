@@ -2,7 +2,7 @@ import { ExternalLink, MonitorOff, Route, Wifi, WifiOff } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { INTERACTION_PATCH_EVENT } from '@/components/ShowControlBridge';
 import { screenText } from '@/lib/screenText';
-import { fetchScreenState, type ScreenPresentation, type ScreenRoute } from '@/lib/screenRoutes';
+import { fetchScreenState, getScreenGatewayUrl, type ScreenPresentation, type ScreenRoute } from '@/lib/screenRoutes';
 import { useStore } from '@/store/useStore';
 import { Visualizer } from '@/components/visualizer/Visualizer';
 
@@ -65,8 +65,8 @@ export function ScreenOutput({ screenId }: { screenId: string }) {
 
   useEffect(() => {
     if (!route || route.owner === 'vj' || !presentation.autoRedirect) return;
-    if (route.owner === 'baofa' && route.url) {
-      window.location.replace(route.url);
+    if (route.url && route.owner !== 'off' && route.owner !== 'diagnostic') {
+      window.location.replace(route.owner === 'external' ? getScreenGatewayUrl(screenId) : route.url);
     }
   }, [presentation.autoRedirect, route]);
 
@@ -85,14 +85,19 @@ export function ScreenOutput({ screenId }: { screenId: string }) {
   }
 
   if (route && route.owner !== 'vj') {
-    const targetUrl = route.owner === 'baofa' ? route.url : null;
+    const targetUrl = route.owner !== 'off' && route.owner !== 'diagnostic'
+      ? route.owner === 'external' && route.url
+        ? getScreenGatewayUrl(screenId)
+        : route.url
+      : null;
+    const routeLabel = route.owner === 'external' ? 'external route' : route.owner;
 
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-black text-white">
         <div className="flex max-w-md flex-col items-center gap-4 px-8 text-center">
           <Route size={34} className="text-cyan-200/70" />
           <div>
-            <div className="text-sm font-bold uppercase tracking-widest">Screen routed to {route.owner}</div>
+            <div className="text-sm font-bold uppercase tracking-widest">Screen routed to {routeLabel}</div>
             <div className="mt-2 text-xs uppercase tracking-wider text-white/45">{screenId}</div>
           </div>
           {targetUrl && (
@@ -101,13 +106,13 @@ export function ScreenOutput({ screenId }: { screenId: string }) {
               className="inline-flex items-center gap-2 rounded-md border border-cyan-200/25 bg-cyan-200/10 px-4 py-2 text-xs font-bold uppercase tracking-widest text-cyan-100 hover:bg-cyan-200 hover:text-black"
             >
               <ExternalLink size={14} />
-              Open baofa screen
+              Open routed screen
             </a>
           )}
           {presentation.autoRedirect && targetUrl && (
             <div className="text-[10px] font-bold uppercase tracking-widest text-white/35">Redirecting automatically</div>
           )}
-          {presentation.autoRedirect && route.owner === 'baofa' && !targetUrl && (
+          {presentation.autoRedirect && route.owner !== 'off' && route.owner !== 'diagnostic' && !targetUrl && (
             <div className="text-[10px] font-bold uppercase tracking-widest text-amber-200/55">Route URL unavailable</div>
           )}
         </div>
