@@ -44,9 +44,10 @@ const transport = SHOW_TRANSPORT;
 const WS_RECONNECT_MAX_MS = 15_000;
 
 export function createShowControlClient(options: ClientOptions) {
-  if (!isUsableWebSocketUrl() && (transport === 'websocket' || transport === 'cloudflare') && databaseUrl) {
-    options.onError?.(`WebSocket URL ${wsUrl || '(empty)'} is not usable from this page; falling back to Firebase`);
-    return createFirebaseClient(options);
+  if (!isUsableWebSocketUrl()) {
+    options.onStatus?.('offline');
+    options.onError?.(`WebSocket URL ${wsUrl || '(empty)'} is not usable from this page`);
+    return createDisabledClient();
   }
   if (shouldUseFirebase()) return createFirebaseClient(options);
   return createWebSocketClient(options);
@@ -67,10 +68,7 @@ function createDisabledClient() {
 }
 
 function shouldUseFirebase() {
-  if (transport === 'firebase') return Boolean(databaseUrl);
-  if (transport === 'websocket' || transport === 'cloudflare') return !isUsableWebSocketUrl() && Boolean(databaseUrl);
-  if (isUsableWebSocketUrl()) return false;
-  return Boolean(databaseUrl);
+  return false;
 }
 
 function isModuleName(value: unknown): value is ModuleName {

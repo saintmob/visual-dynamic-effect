@@ -25,10 +25,10 @@ const HOSTED_DEFAULTS: ShowRuntimeSettings = {
   showId: 'show-main',
   controlToken: '',
   clientId: '',
-  firebaseDatabaseUrl: 'https://vad-gafa-26-default-rtdb.asia-southeast1.firebasedatabase.app',
+  firebaseDatabaseUrl: '',
 };
 
-const VALID_TRANSPORTS = new Set<ShowTransport>(['websocket', 'firebase', 'cloudflare', 'auto']);
+const VALID_TRANSPORTS = new Set<ShowTransport>(['websocket', 'cloudflare', 'auto']);
 
 function getBrowserHost() {
   return typeof window !== 'undefined' && window.location.hostname ? window.location.hostname : 'localhost';

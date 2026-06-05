@@ -1,6 +1,6 @@
 import { FIREBASE_DATABASE_URL, SHOW_BACKEND_URL, SHOW_CONTROL_TOKEN, SHOW_ID, SHOW_TRANSPORT, SHOW_WS_URL } from '@/lib/runtimeConfig';
 
-export type ScreenOwner = 'vj' | 'baofa' | 'off' | 'diagnostic' | 'external';
+export type ScreenOwner = 'vj' | 'baofa' | 'off' | 'diagnostic';
 
 export type ScreenRoute = {
   screenId: string;
@@ -35,15 +35,6 @@ export function getBaofaScreenBaseUrl() {
 
 export const BAOFA_SCREEN_BASE_URL = getBaofaScreenBaseUrl();
 
-export function getScreenGatewayUrl(screenId: string) {
-  const url = new URL(SHOW_BACKEND_URL || window.location.origin);
-  url.pathname = `/screen/${encodeURIComponent(screenId)}`;
-  url.search = '';
-  if (showId && showId !== 'show-main') url.searchParams.set('room', showId);
-  url.hash = '';
-  return url.toString().replace(/\/$/, '');
-}
-
 export const SHOW_SCREEN_IDS = [
   'A1',
   'B1', 'B2', 'B3', 'B4', 'B5', 'B6',
@@ -62,17 +53,7 @@ export async function fetchScreenState(signal?: AbortSignal): Promise<{
 }
 
 async function fetchAuthoritativeState(signal?: AbortSignal) {
-  const backendFirst = shouldPreferBackendState();
-  const primary = backendFirst ? fetchBackendState : fetchFirebaseState;
-  const fallback = backendFirst ? fetchFirebaseState : fetchBackendState;
-
-  try {
-    return await primary(signal);
-  } catch (error) {
-    if (!databaseUrl && backendFirst) throw error;
-    if (!SHOW_BACKEND_URL && !backendFirst) throw error;
-    return fallback(signal);
-  }
+  return fetchBackendState(signal);
 }
 
 async function fetchBackendState(signal?: AbortSignal) {
@@ -104,15 +85,11 @@ function normalizeScreenState(state: any) {
 }
 
 function shouldReadFirebaseState() {
-  if (!databaseUrl) return false;
-  if (SHOW_TRANSPORT === 'firebase') return true;
-  if (SHOW_TRANSPORT === 'websocket' || SHOW_TRANSPORT === 'cloudflare') return !isUsableWebSocketUrl();
-  return !isUsableWebSocketUrl();
+  return SHOW_TRANSPORT === 'firebase' && Boolean(databaseUrl);
 }
 
 function shouldPreferBackendState() {
-  if (isLocalRuntime()) return true;
-  return !shouldReadFirebaseState();
+  return true;
 }
 
 function isLocalRuntime() {

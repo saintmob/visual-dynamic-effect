@@ -2,7 +2,7 @@ import { ExternalLink, MonitorOff, Route, Wifi, WifiOff } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { INTERACTION_PATCH_EVENT } from '@/components/ShowControlBridge';
 import { screenText } from '@/lib/screenText';
-import { fetchScreenState, getScreenGatewayUrl, type ScreenPresentation, type ScreenRoute } from '@/lib/screenRoutes';
+import { fetchScreenState, type ScreenPresentation, type ScreenRoute } from '@/lib/screenRoutes';
 import { useStore } from '@/store/useStore';
 import { Visualizer } from '@/components/visualizer/Visualizer';
 
@@ -66,7 +66,7 @@ export function ScreenOutput({ screenId }: { screenId: string }) {
   useEffect(() => {
     if (!route || route.owner === 'vj' || !presentation.autoRedirect) return;
     if (route.url && route.owner !== 'off' && route.owner !== 'diagnostic') {
-      window.location.replace(route.owner === 'external' ? getScreenGatewayUrl(screenId) : route.url);
+      window.location.replace(route.url);
     }
   }, [presentation.autoRedirect, route]);
 
@@ -86,11 +86,9 @@ export function ScreenOutput({ screenId }: { screenId: string }) {
 
   if (route && route.owner !== 'vj') {
     const targetUrl = route.owner !== 'off' && route.owner !== 'diagnostic'
-      ? route.owner === 'external' && route.url
-        ? getScreenGatewayUrl(screenId)
-        : route.url
+      ? route.url
       : null;
-    const routeLabel = route.owner === 'external' ? 'external route' : route.owner;
+    const routeLabel = route.owner;
 
     return (
       <div className="flex h-screen w-screen items-center justify-center bg-black text-white">

@@ -31,7 +31,6 @@ export function ShowRuntimeSettingsPanel({ status }: { status?: string }) {
             <span className="text-[9px] uppercase tracking-widest text-cyan-200/50">Transport</span>
             <select className="mt-1 w-full rounded-lg border border-cyan-400/20 bg-black px-3 py-2 text-xs" value={settings.transport} onChange={(event) => update('transport', event.target.value)}>
               <option value="websocket">websocket</option>
-              <option value="firebase">firebase</option>
               <option value="cloudflare">cloudflare</option>
               <option value="auto">auto</option>
             </select>
@@ -42,7 +41,6 @@ export function ShowRuntimeSettingsPanel({ status }: { status?: string }) {
             ['showId', 'Show ID'],
             ['controlToken', 'Control Token'],
             ['clientId', 'Client ID'],
-            ['firebaseDatabaseUrl', 'Firebase Database URL'],
           ] as Array<[keyof ShowRuntimeSettings, string]>).map(([key, label]) => (
             <label key={key} className="mb-2 block">
               <span className="text-[9px] uppercase tracking-widest text-cyan-200/50">{label}</span>
